@@ -15,8 +15,13 @@
     --red:#A24132; --red-bg:#F3E0D9;
   }
   *{box-sizing:border-box;}
-  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;padding:26px 16px 80px;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;padding:22px 16px 90px;}
   .wrap{max-width:960px;margin:0 auto;}
+
+  .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--navy);display:flex;z-index:40;box-shadow:0 -2px 14px rgba(0,0,0,.18);padding-bottom:env(safe-area-inset-bottom,0);}
+  .bottom-nav button{flex:1;background:none;border:none;border-top:2px solid transparent;color:#AEB8D1;font-family:'Inter',sans-serif;font-size:11.5px;font-weight:500;padding:12px 4px 10px;cursor:pointer;border-radius:0;}
+  .bottom-nav button.active{color:#FBF1EC;border-top:2px solid #C9705A;font-weight:600;}
+  .bottom-nav button:hover{opacity:1;color:#FBF1EC;}
   .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);margin:0 0 6px;}
   h1{font-family:'Fraunces',serif;font-weight:700;font-size:30px;margin:0 0 6px;color:var(--navy);}
   h2{font-family:'Fraunces',serif;font-size:18px;margin:0;color:var(--navy);}
@@ -132,55 +137,73 @@
   <header>
     <p class="eyebrow">Falabella · Addi · otros</p>
     <h1>Control de pagos</h1>
-    <p class="totalbar">Deuda total: <b id="tb-deuda">—</b> · Compromiso este mes (Falabella + Addi + otros): <b id="tb-mes">—</b> · <span class="edit-link" style="color:var(--ink-soft);" onclick="logout()">Cerrar sesión</span></p>
+    <p class="totalbar">Deuda total: <b id="tb-deuda">—</b> · Compromiso este mes: <b id="tb-mes">—</b> · <span class="edit-link" style="color:var(--ink-soft);" onclick="logout()">Cerrar sesión</span></p>
   </header>
 
-  <div class="debt-hero" id="debt-hero"></div>
+  <section class="view" id="view-resumen">
+    <div class="debt-hero" id="debt-hero"></div>
+    <div class="paydays" id="paydays"></div>
 
-  <div class="paydays" id="paydays"></div>
-  <div class="grid" id="grid"></div>
-
-  <div class="otros-card">
-    <h3>Otros pagos o gastos fijos</h3>
-    <button class="primary small" style="margin-bottom:12px;" onclick="openOtroModal()">+ Agregar gasto</button>
-    <div class="compras" id="otros-list"></div>
-  </div>
-
-  <div class="otros-card">
-    <h3>Historial mensual</h3>
-    <p class="totalbar" id="hist-totales" style="margin-bottom:12px;">—</p>
-    <div class="compras" id="hist-list" style="max-height:260px;"></div>
-  </div>
-
-  <div class="otros-card">
-    <h3>Tendencia de tu deuda</h3>
-    <div id="deuda-chart"></div>
-  </div>
-
-  <div class="otros-card">
-    <h3>Proyección</h3>
-    <div class="btn-row" style="margin-top:0;">
-      <button class="small" id="pv-mes" onclick="setProjView('mes')">Por mes</button>
-      <button class="small" id="pv-quincena" onclick="setProjView('quincena')">Por quincena</button>
+    <div class="sim">
+      <h3>¿Me alcanza para comprar esto?</h3>
+      <div class="fields">
+        <div class="field"><label>Cuenta</label><select id="sim-cuenta"><option value="falabella">Falabella</option><option value="addi">Addi</option></select></div>
+        <div class="field"><label>Monto</label><input type="number" id="sim-monto" placeholder="Ej: 150000"></div>
+        <div class="field"><label>Cuotas</label><input type="number" id="sim-cuotas" value="1" min="1"></div>
+        <button class="primary" onclick="simular()">Calcular</button>
+      </div>
+      <div id="sim-out"></div>
+      <p class="sim-note">Estimado dividiendo el monto entre las cuotas, sin intereses — tu cuota real suele quedar un poco más alta.</p>
     </div>
-    <div id="proj-body"></div>
-    <p class="proj-note" id="proj-note"></p>
-  </div>
+  </section>
 
-  <div class="sim">
-    <h3>¿Me alcanza para comprar esto?</h3>
-    <div class="fields">
-      <div class="field"><label>Cuenta</label><select id="sim-cuenta"><option value="falabella">Falabella</option><option value="addi">Addi</option></select></div>
-      <div class="field"><label>Monto</label><input type="number" id="sim-monto" placeholder="Ej: 150000"></div>
-      <div class="field"><label>Cuotas</label><input type="number" id="sim-cuotas" value="1" min="1"></div>
-      <button class="primary" onclick="simular()">Calcular</button>
+  <section class="view" id="view-cuentas" style="display:none;">
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <section class="view" id="view-otros" style="display:none;">
+    <div class="otros-card">
+      <h3>Otros pagos o gastos fijos</h3>
+      <button class="primary small" style="margin-bottom:12px;" onclick="openOtroModal()">+ Agregar gasto</button>
+      <div class="compras" id="otros-list"></div>
     </div>
-    <div id="sim-out"></div>
-    <p class="sim-note">Estimado dividiendo el monto entre las cuotas, sin intereses — tu cuota real suele quedar un poco más alta.</p>
-  </div>
+  </section>
 
-  <p class="footnote">Los datos quedan guardados en este navegador. Marca "cuota pagada" en cada compra a medida que avancen los meses, y agrega lo nuevo que compres.</p>
+  <section class="view" id="view-historial" style="display:none;">
+    <div class="otros-card">
+      <h3>Historial mensual</h3>
+      <p class="totalbar" id="hist-totales" style="margin-bottom:12px;">—</p>
+      <div class="compras" id="hist-list" style="max-height:260px;"></div>
+    </div>
+
+    <div class="otros-card">
+      <h3>Tendencia de tu deuda</h3>
+      <div id="deuda-chart"></div>
+    </div>
+  </section>
+
+  <section class="view" id="view-proyeccion" style="display:none;">
+    <div class="otros-card">
+      <h3>Proyección</h3>
+      <div class="btn-row" style="margin-top:0;">
+        <button class="small" id="pv-mes" onclick="setProjView('mes')">Por mes</button>
+        <button class="small" id="pv-quincena" onclick="setProjView('quincena')">Por quincena</button>
+      </div>
+      <div id="proj-body"></div>
+      <p class="proj-note" id="proj-note"></p>
+    </div>
+  </section>
+
+  <p class="footnote">Los datos quedan guardados en la base de datos. Marca "cuota pagada" en cada compra a medida que avancen los meses, y agrega lo nuevo que compres.</p>
 </div>
+
+<nav class="bottom-nav">
+  <button data-view="resumen" class="active" onclick="showView('resumen')">Resumen</button>
+  <button data-view="cuentas" onclick="showView('cuentas')">Cuentas</button>
+  <button data-view="otros" onclick="showView('otros')">Otros</button>
+  <button data-view="historial" onclick="showView('historial')">Historial</button>
+  <button data-view="proyeccion" onclick="showView('proyeccion')">Proyección</button>
+</nav>
 
 <div class="overlay hidden" id="overlay"><div class="modal" id="modalBody"></div></div>
 
@@ -235,8 +258,15 @@ async function signUp(){
 }
 async function logout(){ await sb.auth.signOut(); location.reload(); }
 
+function showView(name){
+  document.querySelectorAll('.view').forEach(v=> v.style.display = (v.id==='view-'+name) ? 'block' : 'none');
+  document.querySelectorAll('.bottom-nav button').forEach(b=> b.classList.toggle('active', b.dataset.view===name));
+  window.scrollTo(0,0);
+}
+
 async function afterAuth(){
   document.getElementById('authOverlay').classList.add('hidden');
+  showView('resumen');
   await loadState();
 }
 
