@@ -60,6 +60,8 @@
   button.ghost{border-color:var(--line);color:var(--ink-soft);}
   button.small{padding:4px 9px;font-size:12px;}
   button:hover{opacity:.85;}
+  button:disabled{opacity:.35;cursor:not-allowed;}
+  button:disabled:hover{opacity:.35;}
 
   .compras{max-height:190px;overflow-y:auto;}
   .cp{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;padding:6px 0;border-bottom:1px solid #EFE9D8;}
@@ -248,7 +250,18 @@ function mesLabel(dateStr){
   return new Intl.DateTimeFormat('es-CO',{month:'long',year:'numeric'}).format(d);
 }
 
+function puedeCerrar(cuenta){
+  const cta = cuenta==='falabella' ? state.falabella : state.addi;
+  const dias = daysUntil(cta.proximaFecha);
+  if(dias!==null && dias>0 && cta.confirmado===null) return false;
+  return true;
+}
+
 function cerrarMesFalabella(){
+  if(!puedeCerrar('falabella')){
+    alert(`Todavía faltan ${daysUntil(state.falabella.proximaFecha)} día(s) para el ${formatDate(state.falabella.proximaFecha)} y no has confirmado el pago real. Actualízalo en "Ajustes / confirmar con extracto" o espera a la fecha de pago.`);
+    return;
+  }
   if(!confirm(`¿Ya pagaste ${formatCOP(falabellaUsado())} de Falabella? Esto archiva el mes y avanza las cuotas.`)) return;
   const monto = falabellaUsado();
   const hoy = new Date().toISOString().slice(0,10);
@@ -260,6 +273,10 @@ function cerrarMesFalabella(){
   render(); saveState();
 }
 function cerrarMesAddi(){
+  if(!puedeCerrar('addi')){
+    alert(`Todavía faltan ${daysUntil(state.addi.proximaFecha)} día(s) para el ${formatDate(state.addi.proximaFecha)} y no has confirmado el pago real. Actualízalo en "Ajustes / confirmar con app" o espera a la fecha de pago.`);
+    return;
+  }
   if(!confirm(`¿Ya pagaste ${formatCOP(addiUsado())} de Addi? Esto archiva el mes y avanza las cuotas.`)) return;
   const monto = addiUsado();
   const hoy = new Date().toISOString().slice(0,10);
@@ -362,7 +379,7 @@ function renderGrid(){
       <div class="btn-row">
         <button class="primary small" onclick="openCompra('falabella')">+ Compra</button>
         <button class="ghost small" onclick="openAjustesFalabella()">Ajustes / confirmar con extracto</button>
-        <button class="ghost small" onclick="cerrarMesFalabella()">Cerrar mes</button>
+        <button class="ghost small" onclick="cerrarMesFalabella()" ${puedeCerrar('falabella')?'':'disabled title="Confirma el pago real o espera a la fecha de pago"'}>Cerrar mes</button>
       </div>
       <div class="sub"><div class="sub-title">Compras activas</div><div class="compras">${comprasHTML('falabella', f.compras)}</div></div>
     </div>
@@ -376,7 +393,7 @@ function renderGrid(){
       <div class="meta-row"><span>Fecha</span><b>${formatDate(a.proximaFecha)}</b></div>
       <div class="btn-row">
         <button class="ghost small" onclick="openAjustesAddi()">Ajustes / confirmar con app</button>
-        <button class="ghost small" onclick="cerrarMesAddi()">Cerrar mes</button>
+        <button class="ghost small" onclick="cerrarMesAddi()" ${puedeCerrar('addi')?'':'disabled title="Confirma el pago real o espera a la fecha de pago"'}>Cerrar mes</button>
       </div>
       <div class="sub">
         <div class="sub-title">Crédito Grande ${a.grande.esTuyo?'':'· de tu amigo, no cuenta en tus totales'}</div>
