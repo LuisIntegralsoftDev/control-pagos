@@ -30,6 +30,8 @@
   .topbar .menu-btn{border-color:rgba(255,255,255,.35);color:#FBF1EC;}
   .btn-gastos{display:block;width:100%;background:var(--gold);color:#2E2308;border:none;border-radius:12px;padding:18px 18px;font-family:'Inter',sans-serif;font-weight:700;font-size:15.5px;cursor:pointer;margin-bottom:18px;box-shadow:0 4px 12px rgba(180,132,42,.3);}
   .btn-gastos:hover{opacity:.92;}
+  .btn-ingreso{display:block;width:100%;background:var(--sage);color:#F2F7F0;border:none;border-radius:12px;padding:14px 18px;font-family:'Inter',sans-serif;font-weight:700;font-size:14.5px;cursor:pointer;margin:0 0 18px;box-shadow:0 4px 12px rgba(91,122,94,.3);}
+  .btn-ingreso:hover{opacity:.92;}
   .drawer-backdrop{position:fixed;inset:0;background:rgba(20,26,40,.45);z-index:55;opacity:0;pointer-events:none;transition:opacity .2s ease;}
   .drawer-backdrop.open{opacity:1;pointer-events:auto;}
   .side-drawer{position:fixed;top:0;left:0;bottom:0;width:230px;background:var(--navy);z-index:60;transform:translateX(-100%);transition:transform .25s ease;padding:22px 16px;display:flex;flex-direction:column;gap:2px;box-shadow:2px 0 16px rgba(0,0,0,.2);}
@@ -189,7 +191,7 @@
   <section class="view" id="view-resumen">
     <div class="debt-hero" id="debt-hero"></div>
     <div class="paydays" id="paydays"></div>
-    <p style="text-align:center;margin:0 0 18px;"><span class="edit-link" onclick="openIncome()">Editar ingresos</span></p>
+    <button class="btn-ingreso" onclick="openIncome()">Editar ingresos</button>
 
     <button class="btn-gastos" onclick="showView('otros')">+ Otros pagos o gastos fijos</button>
 
