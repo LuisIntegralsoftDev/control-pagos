@@ -136,6 +136,7 @@
       <div class="field"><label>Descripción</label><input type="text" id="o-desc" placeholder="Ej: Arriendo, servicios"></div>
       <div class="field"><label>Monto</label><input type="number" id="o-monto" placeholder="Ej: 300000"></div>
       <div class="field"><label>Se paga con el ingreso del</label><select id="o-dia"><option value="15">Día 15</option><option value="1">Día 1</option></select></div>
+      <div class="field"><label>¿Se repite?</label><select id="o-tipo"><option value="fijo">Fijo cada mes</option><option value="unico">Solo este pago</option></select></div>
       <button class="primary" onclick="addOtro()">Agregar</button>
     </div>
     <div class="compras" id="otros-list"></div>
@@ -150,7 +151,7 @@
   <div class="otros-card">
     <h3>Proyección de próximos meses</h3>
     <div id="proj-body"></div>
-    <p class="proj-note">Calculado con las cuotas que ya tienes activas: cuando una compra termina sus cuotas, deja de sumar sola. No incluye compras que aún no has hecho.</p>
+    <p class="proj-note">Calculado con las cuotas que ya tienes activas y los gastos marcados como "fijo cada mes". Cuando una compra termina sus cuotas, deja de sumar sola. No incluye compras que aún no has hecho ni gastos de una sola vez.</p>
   </div>
 
   <div class="sim">
@@ -323,6 +324,7 @@ function addiCupoUsadoTotal(){ return state.addi.cupo.compras.reduce((s,c)=>s+pe
 function addiTotalPendiente(){ return addiCupoUsadoTotal()+(state.addi.grande.esTuyo?state.addi.grande.pendiente:0); }
 
 function otrosPorDia(dia){ return state.otros.filter(o=>String(o.dia)===String(dia)).reduce((s,o)=>s+o.monto,0); }
+function otrosPorDiaFijo(dia){ return state.otros.filter(o=>String(o.dia)===String(dia) && (o.tipo||'fijo')==='fijo').reduce((s,o)=>s+o.monto,0); }
 function otrosTotal(){ return state.otros.reduce((s,o)=>s+o.monto,0); }
 
 function render(){ renderTotals(); renderPaydays(); renderGrid(); renderOtros(); renderHistorial(); renderProyeccion(); }
@@ -428,7 +430,7 @@ function renderOtros(){
   const el = document.getElementById('otros-list');
   if(!state.otros.length){ el.innerHTML = '<div class="cp"><span class="date">Sin gastos adicionales registrados</span></div>'; return; }
   el.innerHTML = state.otros.map((o,i)=>`
-    <div class="cp"><div><div class="desc">${o.desc}</div><div class="date">Día ${o.dia}</div></div>
+    <div class="cp"><div><div class="desc">${o.desc}</div><div class="date">Día ${o.dia} · ${(o.tipo||'fijo')==='fijo'?'fijo cada mes':'solo este pago'}</div></div>
     <div><div class="amt">${formatCOP(o.monto)}</div><div class="actions"><span onclick="removeOtro(${i})">quitar</span></div></div></div>
   `).join('');
 }
@@ -453,11 +455,11 @@ function proyeccion(nMeses){
   const rows = [];
   for(let k=0;k<nMeses;k++){
     const sumF = state.falabella.compras.reduce((s,c)=> s + (restantes(c)>k ? c.cuotaMensual : 0), 0);
-    const totalF = sumF + (sumF>0 ? (state.falabella.otrosCargos||0) : 0) + otrosPorDia(15);
+    const totalF = sumF + (sumF>0 ? (state.falabella.otrosCargos||0) : 0) + otrosPorDiaFijo(15);
 
     const sumACupo = state.addi.cupo.compras.reduce((s,c)=> s + (restantes(c)>k ? c.cuotaMensual : 0), 0);
     const sumAGrande = k<grandeMeses ? state.addi.grande.cuotaFija : 0;
-    const totalA = sumACupo + sumAGrande + otrosPorDia(1);
+    const totalA = sumACupo + sumAGrande + otrosPorDiaFijo(1);
 
     rows.push({ label: mesLabel(addMonths(baseFecha, k)), falabella: totalF, addi: totalA, total: totalF+totalA });
   }
@@ -479,8 +481,9 @@ function addOtro(){
   const desc = document.getElementById('o-desc').value || 'Gasto';
   const monto = parseFloat(document.getElementById('o-monto').value)||0;
   const dia = document.getElementById('o-dia').value;
+  const tipo = document.getElementById('o-tipo').value;
   if(monto<=0) return;
-  state.otros.push({desc, monto, dia});
+  state.otros.push({desc, monto, dia, tipo});
   document.getElementById('o-desc').value=''; document.getElementById('o-monto').value='';
   render(); saveState();
 }
