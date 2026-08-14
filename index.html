@@ -149,9 +149,13 @@
   </div>
 
   <div class="otros-card">
-    <h3>Proyección de próximos meses</h3>
+    <h3>Proyección</h3>
+    <div class="btn-row" style="margin-top:0;">
+      <button class="small" id="pv-mes" onclick="setProjView('mes')">Por mes</button>
+      <button class="small" id="pv-quincena" onclick="setProjView('quincena')">Por quincena</button>
+    </div>
     <div id="proj-body"></div>
-    <p class="proj-note">Calculado con las cuotas que ya tienes activas y los gastos marcados como "fijo cada mes". Cuando una compra termina sus cuotas, deja de sumar sola. No incluye compras que aún no has hecho ni gastos de una sola vez.</p>
+    <p class="proj-note" id="proj-note"></p>
   </div>
 
   <div class="sim">
@@ -325,6 +329,7 @@ function addiTotalPendiente(){ return addiCupoUsadoTotal()+(state.addi.grande.es
 
 function otrosPorDia(dia){ return state.otros.filter(o=>String(o.dia)===String(dia)).reduce((s,o)=>s+o.monto,0); }
 function otrosPorDiaFijo(dia){ return state.otros.filter(o=>String(o.dia)===String(dia) && (o.tipo||'fijo')==='fijo').reduce((s,o)=>s+o.monto,0); }
+function otrosPorDiaNoFijo(dia){ return state.otros.filter(o=>String(o.dia)===String(dia) && (o.tipo||'fijo')!=='fijo').reduce((s,o)=>s+o.monto,0); }
 function otrosTotal(){ return state.otros.reduce((s,o)=>s+o.monto,0); }
 
 function render(){ renderTotals(); renderPaydays(); renderGrid(); renderOtros(); renderHistorial(); renderProyeccion(); }
@@ -452,7 +457,10 @@ function renderHistorial(){
 }
 function removeHistorial(i){ state.historial.splice(i,1); render(); saveState(); }
 
-function proyeccion(nMeses){
+let projView = 'mes';
+function setProjView(v){ projView = v; renderProyeccion(); }
+
+function proyeccionMes(nMeses){
   const grandeMeses = (state.addi.grande.esTuyo && state.addi.grande.cuotaFija>0)
     ? Math.ceil(state.addi.grande.pendiente / state.addi.grande.cuotaFija) : 0;
   const baseFecha = state.addi.proximaFecha || state.falabella.proximaFecha || new Date().toISOString().slice(0,10);
@@ -465,23 +473,67 @@ function proyeccion(nMeses){
     const sumAGrande = k<grandeMeses ? state.addi.grande.cuotaFija : 0;
     const totalA = sumACupo + sumAGrande;
 
-    const otros = otrosPorDiaFijo(15) + otrosPorDiaFijo(1);
+    const otrosFijos = otrosPorDiaFijo(15) + otrosPorDiaFijo(1);
+    const otrosNoFijos = k===0 ? (otrosPorDiaNoFijo(15) + otrosPorDiaNoFijo(1)) : 0;
 
-    rows.push({ label: mesLabel(addMonths(baseFecha, k)), falabella: totalF, addi: totalA, otros, total: totalF+totalA+otros });
+    rows.push({ label: mesLabel(addMonths(baseFecha, k)), falabella: totalF, addi: totalA, otrosFijos, otrosNoFijos, total: totalF+totalA+otrosFijos+otrosNoFijos });
   }
   return rows;
 }
+
+function proyeccionQuincena(nPeriodos){
+  const grandeMeses = (state.addi.grande.esTuyo && state.addi.grande.cuotaFija>0)
+    ? Math.ceil(state.addi.grande.pendiente / state.addi.grande.cuotaFija) : 0;
+  const kMax = Math.ceil(nPeriodos/2)+1;
+  let lista = [];
+  for(let k=0;k<kMax;k++){
+    const sumF = state.falabella.compras.reduce((s,c)=> s + (restantes(c)>k ? c.cuotaMensual : 0), 0);
+    const montoF = sumF + (sumF>0 ? (state.falabella.otrosCargos||0) : 0);
+    lista.push({
+      fecha: addMonths(state.falabella.proximaFecha || new Date().toISOString().slice(0,10), k),
+      cuenta:'Falabella', monto: montoF,
+      otrosFijos: otrosPorDiaFijo(15), otrosNoFijos: k===0 ? otrosPorDiaNoFijo(15) : 0
+    });
+    const sumACupo = state.addi.cupo.compras.reduce((s,c)=> s + (restantes(c)>k ? c.cuotaMensual : 0), 0);
+    const sumAGrande = k<grandeMeses ? state.addi.grande.cuotaFija : 0;
+    lista.push({
+      fecha: addMonths(state.addi.proximaFecha || new Date().toISOString().slice(0,10), k),
+      cuenta:'Addi', monto: sumACupo+sumAGrande,
+      otrosFijos: otrosPorDiaFijo(1), otrosNoFijos: k===0 ? otrosPorDiaNoFijo(1) : 0
+    });
+  }
+  lista = lista.filter(r=>r.fecha).sort((a,b)=> a.fecha.localeCompare(b.fecha)).slice(0, nPeriodos);
+  return lista.map(r=>({ ...r, total: r.monto + r.otrosFijos + r.otrosNoFijos }));
+}
+
 function renderProyeccion(){
-  const rows = proyeccion(6);
+  document.getElementById('pv-mes').className = 'small' + (projView==='mes' ? ' primary' : ' ghost');
+  document.getElementById('pv-quincena').className = 'small' + (projView==='quincena' ? ' primary' : ' ghost');
   const el = document.getElementById('proj-body');
-  el.innerHTML = `
-    <table class="proj-table">
-      <thead><tr><th>Mes</th><th>Falabella</th><th>Addi</th><th>Otros</th><th>Total</th></tr></thead>
-      <tbody>
-        ${rows.map(r=>`<tr><td class="mes">${r.label}</td><td>${formatCOP(r.falabella)}</td><td>${formatCOP(r.addi)}</td><td>${formatCOP(r.otros)}</td><td class="total">${formatCOP(r.total)}</td></tr>`).join('')}
-      </tbody>
-    </table>
-  `;
+  const note = document.getElementById('proj-note');
+
+  if(projView==='mes'){
+    const rows = proyeccionMes(6);
+    el.innerHTML = `
+      <table class="proj-table">
+        <thead><tr><th>Mes</th><th>Falabella</th><th>Addi</th><th>Otros fijos</th><th>Otros no fijos</th><th>Total</th></tr></thead>
+        <tbody>
+          ${rows.map(r=>`<tr><td class="mes">${r.label}</td><td>${formatCOP(r.falabella)}</td><td>${formatCOP(r.addi)}</td><td>${formatCOP(r.otrosFijos)}</td><td>${formatCOP(r.otrosNoFijos)}</td><td class="total">${formatCOP(r.total)}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    `;
+  } else {
+    const rows = proyeccionQuincena(12);
+    el.innerHTML = `
+      <table class="proj-table">
+        <thead><tr><th>Fecha</th><th>Cuenta</th><th>Cuota</th><th>Otros fijos</th><th>Otros no fijos</th><th>Total</th></tr></thead>
+        <tbody>
+          ${rows.map(r=>`<tr><td class="mes">${formatDate(r.fecha)}</td><td>${r.cuenta}</td><td>${formatCOP(r.monto)}</td><td>${formatCOP(r.otrosFijos)}</td><td>${formatCOP(r.otrosNoFijos)}</td><td class="total">${formatCOP(r.total)}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+  note.textContent = 'Calculado con las cuotas activas. "Otros no fijos" solo aparece en el pago más próximo de cada cuenta — no se repite hacia adelante.';
 }
 function addOtro(){
   const desc = document.getElementById('o-desc').value || 'Gasto';
