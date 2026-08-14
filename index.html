@@ -336,22 +336,26 @@ function renderTotals(){
 
 function renderPaydays(){
   const el = document.getElementById('paydays');
-  const compF = falabellaUsado() + otrosPorDia(15);
-  const compA = addiUsado() + otrosPorDia(1);
+  const otros15 = otrosPorDia(15);
+  const otros1 = otrosPorDia(1);
+  const compF = falabellaUsado() + otros15;
+  const compA = addiUsado() + otros1;
   const margen15 = state.income.day15 - compF;
   const margen1 = state.income.day1 - compA;
   el.innerHTML = `
     <div class="payday-card">
-      <div class="day">Día 15 · Falabella${otrosPorDia(15)?' + otros':''}</div>
+      <div class="day">Día 15 · Falabella${otros15?' + otros':''}</div>
       <div class="row"><span>Ingreso</span><b>${formatCOP(state.income.day15)}</b></div>
-      <div class="row"><span>Compromiso estimado</span><b>${formatCOP(compF)}</b></div>
+      <div class="row"><span>Falabella</span><b>${formatCOP(falabellaUsado())}</b></div>
+      ${otros15?`<div class="row"><span>Otros</span><b>${formatCOP(otros15)}</b></div>`:''}
       <div class="margen ${margen15>=0?'pos':'neg'}">Margen: ${formatCOP(margen15)}</div>
       <span class="edit-link" onclick="openIncome()">Editar ingresos</span>
     </div>
     <div class="payday-card">
-      <div class="day">Día 1 · Addi${otrosPorDia(1)?' + otros':''}</div>
+      <div class="day">Día 1 · Addi${otros1?' + otros':''}</div>
       <div class="row"><span>Ingreso</span><b>${formatCOP(state.income.day1)}</b></div>
-      <div class="row"><span>Compromiso estimado</span><b>${formatCOP(compA)}</b></div>
+      <div class="row"><span>Addi</span><b>${formatCOP(addiUsado())}</b></div>
+      ${otros1?`<div class="row"><span>Otros</span><b>${formatCOP(otros1)}</b></div>`:''}
       <div class="margen ${margen1>=0?'pos':'neg'}">Margen: ${formatCOP(margen1)}</div>
       <span class="edit-link" onclick="openIncome()">Editar ingresos</span>
     </div>
@@ -455,13 +459,15 @@ function proyeccion(nMeses){
   const rows = [];
   for(let k=0;k<nMeses;k++){
     const sumF = state.falabella.compras.reduce((s,c)=> s + (restantes(c)>k ? c.cuotaMensual : 0), 0);
-    const totalF = sumF + (sumF>0 ? (state.falabella.otrosCargos||0) : 0) + otrosPorDiaFijo(15);
+    const totalF = sumF + (sumF>0 ? (state.falabella.otrosCargos||0) : 0);
 
     const sumACupo = state.addi.cupo.compras.reduce((s,c)=> s + (restantes(c)>k ? c.cuotaMensual : 0), 0);
     const sumAGrande = k<grandeMeses ? state.addi.grande.cuotaFija : 0;
-    const totalA = sumACupo + sumAGrande + otrosPorDiaFijo(1);
+    const totalA = sumACupo + sumAGrande;
 
-    rows.push({ label: mesLabel(addMonths(baseFecha, k)), falabella: totalF, addi: totalA, total: totalF+totalA });
+    const otros = otrosPorDiaFijo(15) + otrosPorDiaFijo(1);
+
+    rows.push({ label: mesLabel(addMonths(baseFecha, k)), falabella: totalF, addi: totalA, otros, total: totalF+totalA+otros });
   }
   return rows;
 }
@@ -470,9 +476,9 @@ function renderProyeccion(){
   const el = document.getElementById('proj-body');
   el.innerHTML = `
     <table class="proj-table">
-      <thead><tr><th>Mes</th><th>Falabella</th><th>Addi</th><th>Total</th></tr></thead>
+      <thead><tr><th>Mes</th><th>Falabella</th><th>Addi</th><th>Otros</th><th>Total</th></tr></thead>
       <tbody>
-        ${rows.map(r=>`<tr><td class="mes">${r.label}</td><td>${formatCOP(r.falabella)}</td><td>${formatCOP(r.addi)}</td><td class="total">${formatCOP(r.total)}</td></tr>`).join('')}
+        ${rows.map(r=>`<tr><td class="mes">${r.label}</td><td>${formatCOP(r.falabella)}</td><td>${formatCOP(r.addi)}</td><td>${formatCOP(r.otros)}</td><td class="total">${formatCOP(r.total)}</td></tr>`).join('')}
       </tbody>
     </table>
   `;
