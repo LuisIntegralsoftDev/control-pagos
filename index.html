@@ -830,35 +830,51 @@ function renderProyeccion(){
   }
   note.textContent = 'Calculado con las cuotas activas. "Otros no fijos" solo aparece en el pago más próximo de cada cuenta — no se repite hacia adelante.';
 }
+function diaFromFecha(fechaStr){
+  const day = parseInt(fechaStr.slice(8,10),10);
+  return day>=15 ? '15' : '1';
+}
 function openOtroModal(){
   showModal(`
     <h3>Agregar gasto</h3>
-    <div class="field-m"><label>Descripción</label><input type="text" id="om-desc" placeholder="Ej: Arriendo, servicios"></div>
-    <div class="field-m"><label>Monto</label><input type="number" id="om-monto" placeholder="Ej: 300000"></div>
-    <div class="field-m"><label>Se paga con el ingreso del</label><select id="om-dia" onchange="toggleOtroModalFecha()"><option value="15">Día 15</option><option value="1">Día 1</option></select></div>
-    <div class="field-m"><label>¿Se repite?</label><select id="om-tipo" onchange="toggleOtroModalFecha()"><option value="fijo">Fijo cada mes</option><option value="unico">Solo este pago</option></select></div>
-    <div class="field-m" id="om-fecha-wrap" style="display:none;"><label>¿Para qué fecha?</label><input type="date" id="om-fecha"></div>
+    <div class="field-m"><label>Descripción</label><input type="text" id="om-desc" placeholder="Ej: Mercado, imprevisto, arriendo"></div>
+    <div class="field-m"><label>Monto</label><input type="number" id="om-monto" placeholder="Ej: 50000"></div>
+    <div class="field-m"><label>¿Se repite?</label><select id="om-tipo" onchange="toggleOtroModalFecha()"><option value="unico">Solo esta vez</option><option value="fijo">Fijo cada mes</option></select></div>
+    <div class="field-m" id="om-fecha-wrap"><label>¿Qué día fue (o va a ser) el gasto?</label><input type="date" id="om-fecha"><div class="hint">El sistema calcula solo si sale del ingreso del 1 o del 15.</div></div>
+    <div class="field-m" id="om-dia-wrap" style="display:none;"><label>Se paga con el ingreso del</label><select id="om-dia"><option value="15">Día 15</option><option value="1">Día 1</option></select></div>
     <div class="modal-actions"><button class="ghost" onclick="closeModal()">Cancelar</button><button class="primary" onclick="saveOtroModal()">Agregar</button></div>
   `);
+  toggleOtroModalFecha();
 }
 function toggleOtroModalFecha(){
   const tipo = document.getElementById('om-tipo').value;
-  const dia = document.getElementById('om-dia').value;
-  const wrap = document.getElementById('om-fecha-wrap');
-  wrap.style.display = tipo==='unico' ? 'block' : 'none';
-  if(tipo==='unico' && !document.getElementById('om-fecha').value){
-    document.getElementById('om-fecha').value = nextOccurrence(parseInt(dia,10));
+  const diaWrap = document.getElementById('om-dia-wrap');
+  const fechaWrap = document.getElementById('om-fecha-wrap');
+  if(tipo==='unico'){
+    diaWrap.style.display = 'none';
+    fechaWrap.style.display = 'block';
+    if(!document.getElementById('om-fecha').value){
+      document.getElementById('om-fecha').value = new Date().toISOString().slice(0,10);
+    }
+  } else {
+    diaWrap.style.display = 'block';
+    fechaWrap.style.display = 'none';
   }
 }
 function saveOtroModal(){
   const desc = document.getElementById('om-desc').value || 'Gasto';
   const monto = parseFloat(document.getElementById('om-monto').value)||0;
-  const dia = document.getElementById('om-dia').value;
   const tipo = document.getElementById('om-tipo').value;
-  const fecha = document.getElementById('om-fecha').value;
   if(monto<=0){ closeModal(); return; }
+  let dia, fecha;
+  if(tipo==='unico'){
+    fecha = document.getElementById('om-fecha').value || new Date().toISOString().slice(0,10);
+    dia = diaFromFecha(fecha);
+  } else {
+    dia = document.getElementById('om-dia').value;
+  }
   const item = {desc, monto, dia, tipo};
-  if(tipo==='unico' && fecha) item.fecha = fecha;
+  if(tipo==='unico') item.fecha = fecha;
   state.otros.push(item);
   closeModal(); render(); saveState();
 }
