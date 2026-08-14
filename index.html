@@ -248,8 +248,7 @@
   <section class="view" id="view-ahorros" style="display:none;">
     <h2 class="page-title">Ahorros</h2>
     <p class="page-sub">Aparte de tus cuentas — tú decides cuándo aportar.</p>
-    <button class="btn-ingreso" style="margin-bottom:10px;" onclick="openNuevoAhorroModal()">+ Nuevo ahorro</button>
-    <p style="margin:0 0 16px;"><span class="edit-link" id="ahorro-toggle-link" onclick="toggleAhorroVista()">Mostrar montos</span></p>
+    <button class="btn-ingreso" style="margin-bottom:16px;" onclick="openNuevoAhorroModal()">+ Nuevo ahorro</button>
     <div id="ahorros-list"></div>
   </section>
 
@@ -1164,9 +1163,7 @@ async function verificarPin(){
 
 function renderAhorros(){
   const el = document.getElementById('ahorros-list');
-  const toggleLink = document.getElementById('ahorro-toggle-link');
   if(!el) return;
-  if(toggleLink) toggleLink.textContent = ahorrosRevelado ? 'Ocultar montos' : 'Mostrar montos';
 
   if(!state.ahorros.length){
     el.innerHTML = '<p style="font-size:14px;color:var(--ink-soft);">Aún no tienes ahorros creados.</p>';
@@ -1187,6 +1184,7 @@ function renderAhorros(){
       <div class="ah-nombre">${a.nombre}</div>
       <div class="ah-saldo">${saldoTxt}</div>
       <div class="ah-actions">
+        <button class="small ghost" onclick="toggleAhorroVista()">${ahorrosRevelado ? 'Ocultar monto' : 'Ver monto'}</button>
         <button class="small primary" onclick="openDepositoModal('${a.id}')">+ Depositar</button>
         <button class="small ghost" onclick="openRetiroModal('${a.id}')">− Retirar</button>
         ${!a.destacado?`<button class="small ghost" onclick="marcarDestacado('${a.id}')">Marcar principal</button>`:''}
