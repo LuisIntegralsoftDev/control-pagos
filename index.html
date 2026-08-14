@@ -153,6 +153,11 @@
   </div>
 
   <div class="otros-card">
+    <h3>Tendencia de tu deuda</h3>
+    <div id="deuda-chart"></div>
+  </div>
+
+  <div class="otros-card">
     <h3>Proyección</h3>
     <div class="btn-row" style="margin-top:0;">
       <button class="small" id="pv-mes" onclick="setProjView('mes')">Por mes</button>
@@ -207,7 +212,8 @@ const DEFAULT_STATE = {
     }
   },
   otros: [],
-  historial: []
+  historial: [],
+  deudaSnapshots: []
 };
 
 let state = null;
@@ -241,6 +247,7 @@ async function loadState(){
   if(data && data.data){
     state = data.data;
     if(!state.historial) state.historial = [];
+    if(!state.deudaSnapshots) state.deudaSnapshots = [];
   } else {
     state = JSON.parse(JSON.stringify(DEFAULT_STATE));
     await sb.from('pagos_estado').insert({ user_id: user.id, data: state });
@@ -305,6 +312,7 @@ function cerrarMesFalabella(){
   state.falabella.compras = state.falabella.compras.filter(c=>restantes(c)>0);
   state.falabella.confirmado = null;
   state.falabella.proximaFecha = addMonths(state.falabella.proximaFecha, 1);
+  registrarSnapshotDeuda(hoy);
   render(); saveState();
 }
 function cerrarMesAddi(){
@@ -321,7 +329,13 @@ function cerrarMesAddi(){
   if(state.addi.grande.esTuyo){ state.addi.grande.pendiente = Math.max(0, state.addi.grande.pendiente - state.addi.grande.cuotaFija); }
   state.addi.confirmado = null;
   state.addi.proximaFecha = addMonths(state.addi.proximaFecha, 1);
+  registrarSnapshotDeuda(hoy);
   render(); saveState();
+}
+function registrarSnapshotDeuda(fecha){
+  const total = falabellaPendienteTotal() + addiTotalPendiente();
+  state.deudaSnapshots = state.deudaSnapshots.filter(p=>p.fecha!==fecha);
+  state.deudaSnapshots.push({ fecha, total });
 }
 
 function falabellaEstimado(){
@@ -354,7 +368,7 @@ function otrosNoFijoEnMes(dia, ymStr){
 }
 function otrosTotal(){ return state.otros.reduce((s,o)=>s+o.monto,0); }
 
-function render(){ renderDebtHero(); renderTotals(); renderPaydays(); renderGrid(); renderOtros(); renderHistorial(); renderProyeccion(); }
+function render(){ renderDebtHero(); renderTotals(); renderPaydays(); renderGrid(); renderOtros(); renderHistorial(); renderDeudaChart(); renderProyeccion(); }
 
 function renderDebtHero(){
   const f = falabellaPendienteTotal();
@@ -525,6 +539,61 @@ function renderHistorial(){
   `).join('');
 }
 function removeHistorial(i){ state.historial.splice(i,1); render(); saveState(); }
+
+function formatCOPShort(n){
+  if(Math.abs(n)>=1000000) return '$'+(n/1000000).toFixed(1).replace('.0','')+'M';
+  if(Math.abs(n)>=1000) return '$'+Math.round(n/1000)+'K';
+  return formatCOP(n);
+}
+function formatDateShort(d){
+  const dt = new Date(d+'T00:00:00');
+  return new Intl.DateTimeFormat('es-CO',{day:'numeric',month:'short'}).format(dt);
+}
+function getDeudaPoints(){
+  const hoy = new Date().toISOString().slice(0,10);
+  const currentTotal = falabellaPendienteTotal() + addiTotalPendiente();
+  let pts = (state.deudaSnapshots||[]).map(p=>({fecha:p.fecha, total:p.total}));
+  pts = pts.filter(p=>p.fecha!==hoy);
+  pts.push({fecha:hoy, total: currentTotal});
+  pts.sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  return pts;
+}
+function renderDeudaChart(){
+  const el = document.getElementById('deuda-chart');
+  const pts = getDeudaPoints();
+  if(pts.length<2){
+    el.innerHTML = `<p style="font-size:13px;color:var(--ink-soft);">Cierra al menos un mes (Falabella o Addi) para empezar a ver la tendencia. Por ahora, tu deuda es <b>${formatCOP(pts[0]?pts[0].total:0)}</b>.</p>`;
+    return;
+  }
+  const W=680, H=220, padL=10, padR=10, padT=26, padB=30;
+  const values = pts.map(p=>p.total);
+  const maxV = Math.max(...values);
+  const minV = Math.min(0, Math.min(...values));
+  const rangeV = (maxV-minV) || 1;
+  const stepX = pts.length>1 ? (W-padL-padR)/(pts.length-1) : 0;
+  const xy = pts.map((p,i)=>{
+    const x = padL + i*stepX;
+    const y = padT + (H-padT-padB) * (1 - (p.total-minV)/rangeV);
+    return { x, y, ...p };
+  });
+  const linePath = xy.map((p,i)=> (i===0?'M':'L')+p.x.toFixed(1)+','+p.y.toFixed(1)).join(' ');
+  const areaPath = linePath + ` L${xy[xy.length-1].x.toFixed(1)},${(H-padB).toFixed(1)} L${xy[0].x.toFixed(1)},${(H-padB).toFixed(1)} Z`;
+  const circles = xy.map(p=>`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4" fill="#A24132" stroke="#FBF9F4" stroke-width="1.5"/>`).join('');
+  const showLabel = (i)=> i===0 || i===xy.length-1 || xy[i].total===maxV || xy[i].total===minV;
+  const labels = xy.map((p,i)=> showLabel(i) ? `<text x="${p.x.toFixed(1)}" y="${Math.max(12,p.y-10).toFixed(1)}" font-size="11" text-anchor="middle" font-family="IBM Plex Mono, monospace" fill="#1C2A46">${formatCOPShort(p.total)}</text>` : '').join('');
+  const skip = Math.ceil(xy.length/6) || 1;
+  const dateLabels = xy.map((p,i)=> (i%skip===0 || i===xy.length-1) ? `<text x="${p.x.toFixed(1)}" y="${H-10}" font-size="10" text-anchor="middle" font-family="IBM Plex Mono, monospace" fill="#6B6759">${formatDateShort(p.fecha)}</text>` : '').join('');
+
+  el.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;">
+      <path d="${areaPath}" fill="#A24132" fill-opacity="0.08" stroke="none"/>
+      <path d="${linePath}" fill="none" stroke="#A24132" stroke-width="2.5"/>
+      ${circles}
+      ${labels}
+      ${dateLabels}
+    </svg>
+  `;
+}
 
 let projView = 'mes';
 function setProjView(v){ projView = v; renderProyeccion(); }
