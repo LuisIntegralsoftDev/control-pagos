@@ -522,9 +522,26 @@ function comprasHTML(cuenta, arr){
   }).join('');
 }
 
-let uiOpen = { falabellaCompras:false, addiCompras:false };
-function toggleCompras(which){ uiOpen[which] = !uiOpen[which]; renderGrid(); }
 function contarActivas(arr){ return arr.filter(c=>restantes(c)>0).length; }
+function verComprasFalabella(){
+  showModal(`
+    <h3>Compras activas · Falabella</h3>
+    ${comprasHTML('falabella', state.falabella.compras)}
+    <div class="modal-actions"><button class="primary" onclick="closeModal()">Cerrar</button></div>
+  `);
+}
+function verComprasAddi(){
+  showModal(`
+    <h3>Compras activas · Cupo Addi</h3>
+    ${comprasHTML('addi', state.addi.cupo.compras)}
+    <div class="modal-actions"><button class="primary" onclick="closeModal()">Cerrar</button></div>
+  `);
+}
+function refreshComprasModal(cuenta){
+  const overlay = document.getElementById('overlay');
+  if(overlay.classList.contains('hidden')) return;
+  if(cuenta==='falabella') verComprasFalabella(); else verComprasAddi();
+}
 
 function renderGrid(){
   const grid = document.getElementById('grid');
@@ -550,11 +567,8 @@ function renderGrid(){
         <button class="ghost small" onclick="cerrarMesFalabella()" ${puedeCerrar('falabella')?'':'disabled title="Confirma el pago real o espera a la fecha de pago"'}>Cerrar mes</button>
       </div>
       <div class="sub">
-        <div class="sub-title" style="display:flex;justify-content:space-between;align-items:center;">
-          <span>Compras activas (${contarActivas(f.compras)})</span>
-          <span style="cursor:pointer;text-decoration:underline;" onclick="toggleCompras('falabellaCompras')">${uiOpen.falabellaCompras?'ocultar':'ver'}</span>
-        </div>
-        ${uiOpen.falabellaCompras ? `<div class="compras">${comprasHTML('falabella', f.compras)}</div>` : ''}
+        <div class="sub-title">Compras activas (${contarActivas(f.compras)})</div>
+        <button class="small" onclick="verComprasFalabella()">Ver detalles</button>
       </div>
     </div>
 
@@ -575,12 +589,11 @@ function renderGrid(){
         <div class="meta-row"><span>Cuota fija</span><b>${formatCOP(a.grande.cuotaFija)}/mes</b></div>
       </div>
       <div class="sub">
-        <div class="sub-title" style="display:flex;justify-content:space-between;align-items:center;">
-          <span>Cupo · disponible ${formatCOP(a.cupo.disponible)} · (${contarActivas(a.cupo.compras)} compras)</span>
-          <span style="cursor:pointer;text-decoration:underline;" onclick="toggleCompras('addiCompras')">${uiOpen.addiCompras?'ocultar':'ver'}</span>
+        <div class="sub-title">Cupo · disponible ${formatCOP(a.cupo.disponible)} · (${contarActivas(a.cupo.compras)} compras)</div>
+        <div class="btn-row" style="margin:8px 0;">
+          <button class="small" onclick="openCompra('addi')">+ Compra en Cupo</button>
+          <button class="small ghost" onclick="verComprasAddi()">Ver detalles</button>
         </div>
-        <button class="small" style="margin:8px 0;" onclick="openCompra('addi')">+ Compra en Cupo</button>
-        ${uiOpen.addiCompras ? `<div class="compras">${comprasHTML('addi', a.cupo.compras)}</div>` : ''}
       </div>
     </div>
   `;
@@ -913,11 +926,13 @@ function marcarCuotaPagada(cuenta, i){
   const arr = cuenta==='falabella' ? state.falabella.compras : state.addi.cupo.compras;
   arr[i].cuotasPagadas++;
   render(); saveState();
+  refreshComprasModal(cuenta);
 }
 function removeCompra(cuenta, i){
   const arr = cuenta==='falabella' ? state.falabella.compras : state.addi.cupo.compras;
   arr.splice(i,1);
   render(); saveState();
+  refreshComprasModal(cuenta);
 }
 
 function openAjustesFalabella(){
