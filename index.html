@@ -376,27 +376,46 @@ function renderTotals(){
   document.getElementById('tb-mes').textContent = formatCOP(falabellaUsado()+addiUsado()+otrosTotal());
 }
 
+function proximoFalabella(){
+  const fecha = nextOccurrence(15);
+  const k = state.falabella.proximaFecha ? monthsBetween(state.falabella.proximaFecha, fecha) : 0;
+  const sum = k<0 ? 0 : state.falabella.compras.reduce((s,c)=> s + (restantes(c)>k ? c.cuotaMensual : 0), 0);
+  const monto = sum + (sum>0 ? (state.falabella.otrosCargos||0) : 0);
+  return { fecha, monto };
+}
+function proximoAddi(){
+  const fecha = nextOccurrence(1);
+  const grandeMeses = (state.addi.grande.esTuyo && state.addi.grande.cuotaFija>0)
+    ? Math.ceil(state.addi.grande.pendiente / state.addi.grande.cuotaFija) : 0;
+  const k = state.addi.proximaFecha ? monthsBetween(state.addi.proximaFecha, fecha) : 0;
+  const sumCupo = k<0 ? 0 : state.addi.cupo.compras.reduce((s,c)=> s + (restantes(c)>k ? c.cuotaMensual : 0), 0);
+  const sumGrande = (k>=0 && k<grandeMeses) ? state.addi.grande.cuotaFija : 0;
+  return { fecha, monto: sumCupo + sumGrande };
+}
+
 function renderPaydays(){
   const el = document.getElementById('paydays');
-  const otros15 = otrosPorDia(15);
-  const otros1 = otrosPorDia(1);
-  const compF = falabellaUsado() + otros15;
-  const compA = addiUsado() + otros1;
+  const pf = proximoFalabella();
+  const pa = proximoAddi();
+  const otros15 = otrosPorDiaFijo(15) + otrosNoFijoEnFecha(15, pf.fecha);
+  const otros1 = otrosPorDiaFijo(1) + otrosNoFijoEnFecha(1, pa.fecha);
+  const compF = pf.monto + otros15;
+  const compA = pa.monto + otros1;
   const margen15 = state.income.day15 - compF;
   const margen1 = state.income.day1 - compA;
   el.innerHTML = `
     <div class="payday-card">
-      <div class="day">Día 15 · Falabella${otros15?' + otros':''}</div>
+      <div class="day">${formatDate(pf.fecha)} (día 15) · Falabella${otros15?' + otros':''}</div>
       <div class="row"><span>Ingreso</span><b>${formatCOP(state.income.day15)}</b></div>
-      <div class="row"><span>Falabella</span><b>${formatCOP(falabellaUsado())}</b></div>
+      <div class="row"><span>Falabella</span><b>${formatCOP(pf.monto)}</b></div>
       ${otros15?`<div class="row"><span>Otros</span><b>${formatCOP(otros15)}</b></div>`:''}
       <div class="margen ${margen15>=0?'pos':'neg'}">Margen: ${formatCOP(margen15)}</div>
       <span class="edit-link" onclick="openIncome()">Editar ingresos</span>
     </div>
     <div class="payday-card">
-      <div class="day">Día 1 · Addi${otros1?' + otros':''}</div>
+      <div class="day">${formatDate(pa.fecha)} (día 1) · Addi${otros1?' + otros':''}</div>
       <div class="row"><span>Ingreso</span><b>${formatCOP(state.income.day1)}</b></div>
-      <div class="row"><span>Addi</span><b>${formatCOP(addiUsado())}</b></div>
+      <div class="row"><span>Addi</span><b>${formatCOP(pa.monto)}</b></div>
       ${otros1?`<div class="row"><span>Otros</span><b>${formatCOP(otros1)}</b></div>`:''}
       <div class="margen ${margen1>=0?'pos':'neg'}">Margen: ${formatCOP(margen1)}</div>
       <span class="edit-link" onclick="openIncome()">Editar ingresos</span>
