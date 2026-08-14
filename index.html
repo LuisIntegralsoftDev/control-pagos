@@ -155,36 +155,23 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const DEFAULT_STATE = {
-  income: { day15: 1680000, day1: 1680000 },
+  income: { day15: 0, day1: 0 },
   falabella: {
-    balance: 1223742.03,
-    available: 376257.97,
+    balance: 0,
+    available: 0,
     cutDay: 29,
-    proximaFecha: '2026-09-15',
-    otrosCargos: 20556.44,
+    proximaFecha: '',
+    otrosCargos: 0,
     confirmado: null,
-    compras: [
-      { desc:'Seguro AV Falabella', date:'2026-06-18', valor:349994, cuotasTotales:6, cuotasPagadas:2, cuotaMensual:12111.62 },
-      { desc:'Falabella.com', date:'2026-07-03', valor:305900, cuotasTotales:6, cuotasPagadas:1, cuotaMensual:50983.33 },
-      { desc:'Falabella.com', date:'2026-07-09', valor:145900, cuotasTotales:3, cuotasPagadas:1, cuotaMensual:48633.33 },
-      { desc:'Temu', date:'2026-07-10', valor:160074, cuotasTotales:5, cuotasPagadas:1, cuotaMensual:32014.80 },
-      { desc:'Temu', date:'2026-07-10', valor:15005, cuotasTotales:2, cuotasPagadas:1, cuotaMensual:7502.50 },
-      { desc:'Falabella.com', date:'2026-07-21', valor:709900, cuotasTotales:6, cuotasPagadas:1, cuotaMensual:118316.66 },
-      { desc:'Internet Tigo', date:'2026-08-10', valor:100000, cuotasTotales:2, cuotasPagadas:0, cuotaMensual:50000 }
-    ]
+    compras: []
   },
   addi: {
-    proximaFecha: '2026-09-01',
-    confirmado: 648008,
-    grande: { pendiente: 2444723, cuotaFija: 205000, esTuyo: false },
+    proximaFecha: '',
+    confirmado: null,
+    grande: { pendiente: 0, cuotaFija: 0, esTuyo: false },
     cupo: {
-      disponible: 620035,
-      compras: [
-        { desc:'Compra Cupo', date:'2026-08-01', valor:120400, cuotasTotales:3, cuotasPagadas:0, cuotaMensual:40133.33 },
-        { desc:'Compra Cupo', date:'2026-08-01', valor:829000, cuotasTotales:6, cuotasPagadas:0, cuotaMensual:138166.67 },
-        { desc:'Compra Cupo', date:'2026-07-05', valor:325000, cuotasTotales:4, cuotasPagadas:0, cuotaMensual:81250 },
-        { desc:'Compra Cupo', date:'2026-06-20', valor:207836, cuotasTotales:2, cuotasPagadas:1, cuotaMensual:105565 }
-      ]
+      disponible: 0,
+      compras: []
     }
   },
   otros: []
