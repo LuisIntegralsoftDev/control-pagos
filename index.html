@@ -528,6 +528,26 @@ function removeHistorial(i){ state.historial.splice(i,1); render(); saveState();
 
 let projView = 'mes';
 function setProjView(v){ projView = v; renderProyeccion(); }
+let projRowsMes = [];
+let projRowsQuincena = [];
+
+function itemsFalabella(k){
+  if(k<0) return [];
+  return state.falabella.compras.filter(c=>restantes(c)>k).map(c=>({desc:c.desc, monto:c.cuotaMensual}));
+}
+function itemsAddiCupo(k){
+  if(k<0) return [];
+  return state.addi.cupo.compras.filter(c=>restantes(c)>k).map(c=>({desc:c.desc, monto:c.cuotaMensual}));
+}
+function itemsOtrosFijos(dia){
+  return state.otros.filter(o=>String(o.dia)===String(dia) && (o.tipo||'fijo')==='fijo').map(o=>({desc:o.desc, monto:o.monto}));
+}
+function itemsOtrosNoFijosEnFecha(dia, fecha){
+  return state.otros.filter(o=>(o.tipo||'fijo')==='unico' && String(o.dia)===String(dia) && getTargetFecha(o)===fecha).map(o=>({desc:o.desc, monto:o.monto}));
+}
+function itemsOtrosNoFijosEnMes(dia, ym){
+  return state.otros.filter(o=>(o.tipo||'fijo')==='unico' && String(o.dia)===String(dia) && getTargetFecha(o).slice(0,7)===ym).map(o=>({desc:o.desc, monto:o.monto}));
+}
 
 function proyeccionMes(nMeses){
   const grandeMeses = (state.addi.grande.esTuyo && state.addi.grande.cuotaFija>0)
@@ -542,17 +562,25 @@ function proyeccionMes(nMeses){
 
     const kF = state.falabella.proximaFecha ? monthsBetween(state.falabella.proximaFecha, fechaF) : 0;
     const sumF = kF<0 ? 0 : state.falabella.compras.reduce((s,c)=> s + (restantes(c)>kF ? c.cuotaMensual : 0), 0);
-    const totalF = sumF + (sumF>0 ? (state.falabella.otrosCargos||0) : 0);
+    const cargosF = sumF>0 ? (state.falabella.otrosCargos||0) : 0;
+    const totalF = sumF + cargosF;
+    const itemsF = itemsFalabella(kF);
+    if(cargosF>0) itemsF.push({desc:'Intereses + seguro estimados', monto:cargosF});
 
     const kA = state.addi.proximaFecha ? monthsBetween(state.addi.proximaFecha, fechaA) : 0;
     const sumACupo = kA<0 ? 0 : state.addi.cupo.compras.reduce((s,c)=> s + (restantes(c)>kA ? c.cuotaMensual : 0), 0);
     const sumAGrande = (kA>=0 && kA<grandeMeses) ? state.addi.grande.cuotaFija : 0;
     const totalA = sumACupo + sumAGrande;
+    const itemsA = itemsAddiCupo(kA);
+    if(sumAGrande>0) itemsA.push({desc:'Crédito Grande (cuota fija)', monto:sumAGrande});
 
-    const otrosFijos = otrosPorDiaFijo(15) + otrosPorDiaFijo(1);
-    const otrosNoFijos = otrosNoFijoEnMes(15, ym) + otrosNoFijoEnMes(1, ym);
+    const itemsOF = itemsOtrosFijos(15).concat(itemsOtrosFijos(1));
+    const itemsONF = itemsOtrosNoFijosEnMes(15, ym).concat(itemsOtrosNoFijosEnMes(1, ym));
+    const otrosFijos = itemsOF.reduce((s,it)=>s+it.monto,0);
+    const otrosNoFijos = itemsONF.reduce((s,it)=>s+it.monto,0);
 
-    rows.push({ label: mesLabel(fechaF), falabella: totalF, addi: totalA, otrosFijos, otrosNoFijos, total: totalF+totalA+otrosFijos+otrosNoFijos });
+    rows.push({ label: mesLabel(fechaF), falabella: totalF, addi: totalA, otrosFijos, otrosNoFijos, total: totalF+totalA+otrosFijos+otrosNoFijos,
+      detalle: { falabella: itemsF, addi: itemsA, otrosFijos: itemsOF, otrosNoFijos: itemsONF } });
   }
   return rows;
 }
@@ -566,18 +594,58 @@ function proyeccionQuincena(nPeriodos){
     if(fF <= fA){
       const kF = state.falabella.proximaFecha ? monthsBetween(state.falabella.proximaFecha, fF) : 0;
       const sumF = kF<0 ? 0 : state.falabella.compras.reduce((s,c)=> s + (restantes(c)>kF ? c.cuotaMensual : 0), 0);
-      const montoF = sumF + (sumF>0 ? (state.falabella.otrosCargos||0) : 0);
-      rows.push({ fecha: fF, cuenta:'Falabella', monto: montoF, otrosFijos: otrosPorDiaFijo(15), otrosNoFijos: otrosNoFijoEnFecha(15, fF) });
+      const cargosF = sumF>0 ? (state.falabella.otrosCargos||0) : 0;
+      const montoF = sumF + cargosF;
+      const itemsF = itemsFalabella(kF);
+      if(cargosF>0) itemsF.push({desc:'Intereses + seguro estimados', monto:cargosF});
+      const itemsOF = itemsOtrosFijos(15);
+      const itemsONF = itemsOtrosNoFijosEnFecha(15, fF);
+      rows.push({ fecha: fF, cuenta:'Falabella', monto: montoF, otrosFijos: itemsOF.reduce((s,it)=>s+it.monto,0), otrosNoFijos: itemsONF.reduce((s,it)=>s+it.monto,0),
+        detalle: { cuenta: itemsF, otrosFijos: itemsOF, otrosNoFijos: itemsONF } });
       fF = addMonths(fF, 1);
     } else {
       const kA = state.addi.proximaFecha ? monthsBetween(state.addi.proximaFecha, fA) : 0;
       const sumACupo = kA<0 ? 0 : state.addi.cupo.compras.reduce((s,c)=> s + (restantes(c)>kA ? c.cuotaMensual : 0), 0);
       const sumAGrande = (kA>=0 && kA<grandeMeses) ? state.addi.grande.cuotaFija : 0;
-      rows.push({ fecha: fA, cuenta:'Addi', monto: sumACupo+sumAGrande, otrosFijos: otrosPorDiaFijo(1), otrosNoFijos: otrosNoFijoEnFecha(1, fA) });
+      const itemsA = itemsAddiCupo(kA);
+      if(sumAGrande>0) itemsA.push({desc:'Crédito Grande (cuota fija)', monto:sumAGrande});
+      const itemsOF = itemsOtrosFijos(1);
+      const itemsONF = itemsOtrosNoFijosEnFecha(1, fA);
+      rows.push({ fecha: fA, cuenta:'Addi', monto: sumACupo+sumAGrande, otrosFijos: itemsOF.reduce((s,it)=>s+it.monto,0), otrosNoFijos: itemsONF.reduce((s,it)=>s+it.monto,0),
+        detalle: { cuenta: itemsA, otrosFijos: itemsOF, otrosNoFijos: itemsONF } });
       fA = addMonths(fA, 1);
     }
   }
   return rows.map(r=>({ ...r, total: r.monto + r.otrosFijos + r.otrosNoFijos }));
+}
+
+function renderDetalleGrupo(titulo, items){
+  if(!items || !items.length) return '';
+  const total = items.reduce((s,it)=>s+it.monto,0);
+  return `
+    <div style="margin-bottom:14px;">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);margin-bottom:6px;">${titulo} · ${formatCOP(total)}</div>
+      ${items.map(it=>`<div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid #EFE9D8;"><span>${it.desc}</span><span style="font-family:'IBM Plex Mono',monospace;">${formatCOP(it.monto)}</span></div>`).join('')}
+    </div>
+  `;
+}
+function verDetalleMes(i){
+  const r = projRowsMes[i];
+  const cuerpo = renderDetalleGrupo('Falabella', r.detalle.falabella) + renderDetalleGrupo('Addi', r.detalle.addi) + renderDetalleGrupo('Otros fijos', r.detalle.otrosFijos) + renderDetalleGrupo('Otros no fijos', r.detalle.otrosNoFijos);
+  showModal(`
+    <h3 style="text-transform:capitalize;">${r.label}</h3>
+    ${cuerpo || '<p style="font-size:13px;color:var(--ink-soft);">Nada programado para este mes.</p>'}
+    <div class="modal-actions"><button class="primary" onclick="closeModal()">Cerrar</button></div>
+  `);
+}
+function verDetalleQuincena(i){
+  const r = projRowsQuincena[i];
+  const cuerpo = renderDetalleGrupo(r.cuenta, r.detalle.cuenta) + renderDetalleGrupo('Otros fijos', r.detalle.otrosFijos) + renderDetalleGrupo('Otros no fijos', r.detalle.otrosNoFijos);
+  showModal(`
+    <h3>${formatDate(r.fecha)} · ${r.cuenta}</h3>
+    ${cuerpo || '<p style="font-size:13px;color:var(--ink-soft);">Nada programado para este pago.</p>'}
+    <div class="modal-actions"><button class="primary" onclick="closeModal()">Cerrar</button></div>
+  `);
 }
 
 function renderProyeccion(){
@@ -588,21 +656,23 @@ function renderProyeccion(){
 
   if(projView==='mes'){
     const rows = proyeccionMes(6);
+    projRowsMes = rows;
     el.innerHTML = `
       <table class="proj-table">
-        <thead><tr><th>Mes</th><th>Falabella</th><th>Addi</th><th>Otros fijos</th><th>Otros no fijos</th><th>Total</th></tr></thead>
+        <thead><tr><th>Mes</th><th>Falabella</th><th>Addi</th><th>Otros fijos</th><th>Otros no fijos</th><th>Total</th><th></th></tr></thead>
         <tbody>
-          ${rows.map(r=>`<tr><td class="mes">${r.label}</td><td>${formatCOP(r.falabella)}</td><td>${formatCOP(r.addi)}</td><td>${formatCOP(r.otrosFijos)}</td><td>${formatCOP(r.otrosNoFijos)}</td><td class="total">${formatCOP(r.total)}</td></tr>`).join('')}
+          ${rows.map((r,i)=>`<tr><td class="mes">${r.label}</td><td>${formatCOP(r.falabella)}</td><td>${formatCOP(r.addi)}</td><td>${formatCOP(r.otrosFijos)}</td><td>${formatCOP(r.otrosNoFijos)}</td><td class="total">${formatCOP(r.total)}</td><td><button class="small ghost" onclick="verDetalleMes(${i})">Ver detalles</button></td></tr>`).join('')}
         </tbody>
       </table>
     `;
   } else {
     const rows = proyeccionQuincena(12);
+    projRowsQuincena = rows;
     el.innerHTML = `
       <table class="proj-table">
-        <thead><tr><th>Fecha</th><th>Cuenta</th><th>Cuota</th><th>Otros fijos</th><th>Otros no fijos</th><th>Total</th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Cuenta</th><th>Cuota</th><th>Otros fijos</th><th>Otros no fijos</th><th>Total</th><th></th></tr></thead>
         <tbody>
-          ${rows.map(r=>`<tr><td class="mes">${formatDate(r.fecha)}</td><td>${r.cuenta}</td><td>${formatCOP(r.monto)}</td><td>${formatCOP(r.otrosFijos)}</td><td>${formatCOP(r.otrosNoFijos)}</td><td class="total">${formatCOP(r.total)}</td></tr>`).join('')}
+          ${rows.map((r,i)=>`<tr><td class="mes">${formatDate(r.fecha)}</td><td>${r.cuenta}</td><td>${formatCOP(r.monto)}</td><td>${formatCOP(r.otrosFijos)}</td><td>${formatCOP(r.otrosNoFijos)}</td><td class="total">${formatCOP(r.total)}</td><td><button class="small ghost" onclick="verDetalleQuincena(${i})">Ver detalles</button></td></tr>`).join('')}
         </tbody>
       </table>
     `;
