@@ -122,11 +122,12 @@
   .debt-hero .split b{display:block;font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600;opacity:1;margin-top:2px;}
 
   .proj-card{border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:10px;background:var(--paper);}
-  .proj-card .proj-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:6px;}
+  .proj-card .proj-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px dashed var(--line);}
   .proj-card .pmes{font-family:'Fraunces',serif;font-weight:600;font-size:15px;color:var(--navy);text-transform:capitalize;}
   .proj-card .ptotal{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:16px;color:var(--navy);white-space:nowrap;}
-  .proj-card .proj-breakdown{font-size:12.5px;color:var(--ink-soft);margin-bottom:10px;line-height:1.6;}
-  .proj-card .proj-breakdown b{color:var(--ink);font-weight:600;font-family:'IBM Plex Mono',monospace;}
+  .proj-card .proj-rows{margin-bottom:12px;}
+  .proj-card .proj-row{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--ink-soft);padding:4px 0;}
+  .proj-card .proj-row b{color:var(--ink);font-weight:600;font-family:'IBM Plex Mono',monospace;font-size:13px;}
   .proj-note{font-size:11.5px;color:var(--ink-soft);margin-top:10px;}
 </style>
 </head>
@@ -784,7 +785,12 @@ function renderProyeccion(){
     el.innerHTML = rows.map((r,i)=>`
       <div class="proj-card">
         <div class="proj-head"><span class="pmes">${r.label}</span><span class="ptotal">${formatCOP(r.total)}</span></div>
-        <div class="proj-breakdown">Falabella <b>${formatCOP(r.falabella)}</b> · Addi <b>${formatCOP(r.addi)}</b> · Otros fijos <b>${formatCOP(r.otrosFijos)}</b>${r.otrosNoFijos?` · Otros no fijos <b>${formatCOP(r.otrosNoFijos)}</b>`:''}</div>
+        <div class="proj-rows">
+          <div class="proj-row"><span>Falabella</span><b>${formatCOP(r.falabella)}</b></div>
+          <div class="proj-row"><span>Addi</span><b>${formatCOP(r.addi)}</b></div>
+          <div class="proj-row"><span>Otros fijos</span><b>${formatCOP(r.otrosFijos)}</b></div>
+          ${r.otrosNoFijos ? `<div class="proj-row"><span>Otros no fijos</span><b>${formatCOP(r.otrosNoFijos)}</b></div>` : ''}
+        </div>
         <button class="small ghost" onclick="verDetalleMes(${i})">Ver detalles</button>
       </div>
     `).join('');
@@ -794,7 +800,11 @@ function renderProyeccion(){
     el.innerHTML = rows.map((r,i)=>`
       <div class="proj-card">
         <div class="proj-head"><span class="pmes">${formatDate(r.fecha)}</span><span class="ptotal">${formatCOP(r.total)}</span></div>
-        <div class="proj-breakdown">${r.cuenta} <b>${formatCOP(r.monto)}</b>${r.otrosFijos?` · Otros fijos <b>${formatCOP(r.otrosFijos)}</b>`:''}${r.otrosNoFijos?` · Otros no fijos <b>${formatCOP(r.otrosNoFijos)}</b>`:''}</div>
+        <div class="proj-rows">
+          <div class="proj-row"><span>${r.cuenta}</span><b>${formatCOP(r.monto)}</b></div>
+          ${r.otrosFijos ? `<div class="proj-row"><span>Otros fijos</span><b>${formatCOP(r.otrosFijos)}</b></div>` : ''}
+          ${r.otrosNoFijos ? `<div class="proj-row"><span>Otros no fijos</span><b>${formatCOP(r.otrosNoFijos)}</b></div>` : ''}
+        </div>
         <button class="small ghost" onclick="verDetalleQuincena(${i})">Ver detalles</button>
       </div>
     `).join('');
