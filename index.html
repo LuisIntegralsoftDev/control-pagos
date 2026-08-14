@@ -467,8 +467,10 @@ function proximoFalabella(){
   const fecha = nextOccurrence(15);
   const k = state.falabella.proximaFecha ? monthsBetween(state.falabella.proximaFecha, fecha) : 0;
   const sum = k<0 ? 0 : state.falabella.compras.reduce((s,c)=> s + (restantes(c)>k ? c.cuotaMensual : 0), 0);
-  const monto = sum + (sum>0 ? (state.falabella.otrosCargos||0) : 0);
-  return { fecha, monto };
+  const cargos = sum>0 ? (state.falabella.otrosCargos||0) : 0;
+  const items = itemsFalabella(k);
+  if(cargos>0) items.push({desc:'Intereses + seguro estimados', monto:cargos});
+  return { fecha, monto: sum+cargos, items };
 }
 function proximoAddi(){
   const fecha = nextOccurrence(1);
@@ -477,19 +479,31 @@ function proximoAddi(){
   const k = state.addi.proximaFecha ? monthsBetween(state.addi.proximaFecha, fecha) : 0;
   const sumCupo = k<0 ? 0 : state.addi.cupo.compras.reduce((s,c)=> s + (restantes(c)>k ? c.cuotaMensual : 0), 0);
   const sumGrande = (k>=0 && k<grandeMeses) ? state.addi.grande.cuotaFija : 0;
-  return { fecha, monto: sumCupo + sumGrande };
+  const items = itemsAddiCupo(k);
+  if(sumGrande>0) items.push({desc:'Crédito Grande (cuota fija)', monto:sumGrande});
+  return { fecha, monto: sumCupo + sumGrande, items };
 }
+
+let paydayDetalle = { falabella:null, addi:null };
 
 function renderPaydays(){
   const el = document.getElementById('paydays');
   const pf = proximoFalabella();
   const pa = proximoAddi();
-  const otros15 = otrosPorDiaFijo(15) + otrosNoFijoEnFecha(15, pf.fecha);
-  const otros1 = otrosPorDiaFijo(1) + otrosNoFijoEnFecha(1, pa.fecha);
+  const otrosFijosF = itemsOtrosFijos(15);
+  const otrosNoFijosF = itemsOtrosNoFijosEnFecha(15, pf.fecha);
+  const otrosFijosA = itemsOtrosFijos(1);
+  const otrosNoFijosA = itemsOtrosNoFijosEnFecha(1, pa.fecha);
+  const otros15 = otrosFijosF.reduce((s,it)=>s+it.monto,0) + otrosNoFijosF.reduce((s,it)=>s+it.monto,0);
+  const otros1 = otrosFijosA.reduce((s,it)=>s+it.monto,0) + otrosNoFijosA.reduce((s,it)=>s+it.monto,0);
   const compF = pf.monto + otros15;
   const compA = pa.monto + otros1;
   const margen15 = state.income.day15 - compF;
   const margen1 = state.income.day1 - compA;
+
+  paydayDetalle.falabella = { fecha: pf.fecha, items: pf.items, otrosFijos: otrosFijosF, otrosNoFijos: otrosNoFijosF };
+  paydayDetalle.addi = { fecha: pa.fecha, items: pa.items, otrosFijos: otrosFijosA, otrosNoFijos: otrosNoFijosA };
+
   el.innerHTML = `
     <div class="payday-card">
       <div class="day">${formatDate(pf.fecha)} (día 15) · Falabella${otros15?' + otros':''}</div>
@@ -497,7 +511,7 @@ function renderPaydays(){
       <div class="row"><span>Falabella</span><b>${formatCOP(pf.monto)}</b></div>
       ${otros15?`<div class="row"><span>Otros</span><b>${formatCOP(otros15)}</b></div>`:''}
       <div class="margen ${margen15>=0?'pos':'neg'}">Margen: ${formatCOP(margen15)}</div>
-      <span class="edit-link" onclick="openIncome()">Editar ingresos</span>
+      <div style="margin-top:10px;"><span class="edit-link" onclick="verDetallePayday('falabella')">Ver detalles</span> · <span class="edit-link" onclick="openIncome()">Editar ingresos</span></div>
     </div>
     <div class="payday-card">
       <div class="day">${formatDate(pa.fecha)} (día 1) · Addi${otros1?' + otros':''}</div>
@@ -505,9 +519,20 @@ function renderPaydays(){
       <div class="row"><span>Addi</span><b>${formatCOP(pa.monto)}</b></div>
       ${otros1?`<div class="row"><span>Otros</span><b>${formatCOP(otros1)}</b></div>`:''}
       <div class="margen ${margen1>=0?'pos':'neg'}">Margen: ${formatCOP(margen1)}</div>
-      <span class="edit-link" onclick="openIncome()">Editar ingresos</span>
+      <div style="margin-top:10px;"><span class="edit-link" onclick="verDetallePayday('addi')">Ver detalles</span> · <span class="edit-link" onclick="openIncome()">Editar ingresos</span></div>
     </div>
   `;
+}
+function verDetallePayday(cuenta){
+  const d = paydayDetalle[cuenta];
+  if(!d) return;
+  const titulo = cuenta==='falabella' ? 'Falabella' : 'Addi';
+  const cuerpo = renderDetalleGrupo(titulo, d.items) + renderDetalleGrupo('Otros fijos', d.otrosFijos) + renderDetalleGrupo('Otros no fijos', d.otrosNoFijos);
+  showModal(`
+    <h3>${formatDate(d.fecha)} · ${titulo}</h3>
+    ${cuerpo || '<p style="font-size:13px;color:var(--ink-soft);">Nada programado para este pago.</p>'}
+    <div class="modal-actions"><button class="primary" onclick="closeModal()">Cerrar</button></div>
+  `);
 }
 
 function comprasHTML(cuenta, arr){
