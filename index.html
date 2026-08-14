@@ -216,6 +216,7 @@
     <h2 class="page-title">Otros pagos o gastos fijos</h2>
     <p class="page-sub">Todo lo que no es Falabella ni Addi, pero también sale de tu ingreso.</p>
     <button class="btn-gastos" onclick="openOtroModal()">+ Agregar gasto</button>
+    <div class="btn-row" id="otros-tabs" style="margin-top:0;"></div>
     <div id="otros-list"></div>
   </section>
 
@@ -641,13 +642,14 @@ function proximaFechaOtro(o){
 }
 function otroItemHTML(o, i){
   const tipo = o.tipo||'fijo';
+  const proxima = formatDate(proximaFechaOtro(o));
   let meta, extraActions = '';
   if(tipo==='fijo'){
-    meta = `Día ${o.dia} · fijo cada mes`;
+    meta = `Día ${o.dia} · fijo cada mes · próximo pago: ${proxima}`;
   } else if(tipo==='unico'){
-    meta = `Día ${o.dia} · solo el ${formatDate(getTargetFecha(o))}`;
+    meta = `Día ${o.dia} · solo el ${proxima}`;
   } else {
-    meta = `Día ${o.dia} · cuota ${o.cuotasPagadas+1} de ${o.cuotasTotales} · desde el ${formatDate(o.fecha)}`;
+    meta = `Día ${o.dia} · cuota ${o.cuotasPagadas+1} de ${o.cuotasTotales} · próximo pago: ${proxima}`;
     extraActions = `<span onclick="marcarCuotaOtroPagada(${i})">cuota pagada</span>`;
   }
   return `
@@ -657,27 +659,28 @@ function otroItemHTML(o, i){
       <div class="oi-actions">${extraActions}<span onclick="removeOtro(${i})">quitar</span></div>
     </div>`;
 }
+let otrosTab = 'fijo';
+function setOtrosTab(t){ otrosTab = t; renderOtros(); }
 function renderOtros(){
+  const tabsEl = document.getElementById('otros-tabs');
   const el = document.getElementById('otros-list');
-  if(!state.otros.length){ el.innerHTML = '<p style="font-size:14px;color:var(--ink-soft);">Sin gastos adicionales registrados.</p>'; return; }
 
   const conIndice = state.otros.map((o,i)=>({o,i}));
   const porTipo = (tipo)=> conIndice
     .filter(x=>(x.o.tipo||'fijo')===tipo)
     .sort((a,b)=> proximaFechaOtro(a.o).localeCompare(proximaFechaOtro(b.o)));
 
-  const grupos = [
-    { titulo:'Fijos cada mes', items: porTipo('fijo') },
-    { titulo:'A cuotas', items: porTipo('cuotas') },
-    { titulo:'Solo una vez', items: porTipo('unico') }
-  ];
+  const grupos = { fijo: porTipo('fijo'), cuotas: porTipo('cuotas'), unico: porTipo('unico') };
+  const etiquetas = { fijo:'Fijos', cuotas:'A cuotas', unico:'Solo una vez' };
 
-  el.innerHTML = grupos
-    .filter(g=>g.items.length)
-    .map(g=>`
-      <div class="sub-title" style="margin:14px 0 8px;">${g.titulo}</div>
-      ${g.items.map(x=>otroItemHTML(x.o, x.i)).join('')}
-    `).join('');
+  tabsEl.innerHTML = Object.keys(etiquetas).map(t=>
+    `<button class="small ${otrosTab===t?'primary':'ghost'}" onclick="setOtrosTab('${t}')">${etiquetas[t]} (${grupos[t].length})</button>`
+  ).join('');
+
+  const activos = grupos[otrosTab];
+  el.innerHTML = activos.length
+    ? activos.map(x=>otroItemHTML(x.o, x.i)).join('')
+    : '<p style="font-size:14px;color:var(--ink-soft);">Nada registrado en esta categoría todavía.</p>';
 }
 function renderHistorial(){
   const totalesEl = document.getElementById('hist-totales');
