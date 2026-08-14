@@ -673,7 +673,7 @@ function otroItemHTML(o, i){
   if(tipo==='fijo'){
     meta = `Día ${o.dia} · fijo cada mes · próximo pago: ${proxima}`;
   } else if(tipo==='unico'){
-    meta = `Día ${o.dia} · solo el ${proxima}`;
+    meta = `Día ${o.dia} · solo el ${proxima}${o.origenAhorro?' · va a ahorro':''}`;
   } else {
     meta = `Día ${o.dia} · cuota ${o.cuotasPagadas+1} de ${o.cuotasTotales} · próximo pago: ${proxima}`;
     extraActions = `<span onclick="marcarCuotaOtroPagada(${i})">cuota pagada</span>`;
@@ -956,6 +956,7 @@ function diaFromFecha(fechaStr){
   return day>=15 ? '15' : '1';
 }
 function openOtroModal(){
+  const opcionesAhorro = state.ahorros.map(a=>`<option value="${a.id}">${a.nombre}</option>`).join('');
   showModal(`
     <h3>Agregar gasto</h3>
     <div class="field-m"><label>Descripción</label><input type="text" id="om-desc" placeholder="Ej: Mercado, imprevisto, arriendo"></div>
@@ -966,6 +967,7 @@ function openOtroModal(){
     </select></div>
     <div class="field-m" id="om-monto-wrap"><label id="om-monto-label">Monto</label><input type="number" id="om-monto" placeholder="Ej: 50000"></div>
     <div class="field-m" id="om-fecha-wrap"><label>¿Qué día fue (o va a ser) el gasto?</label><input type="date" id="om-fecha"><div class="hint">El sistema calcula solo si sale del ingreso del 1 o del 15.</div></div>
+    <div class="field-m" id="om-ahorro-wrap"><label>¿Va para un ahorro?</label><select id="om-ahorro"><option value="">No, es un gasto normal</option>${opcionesAhorro}</select><div class="hint">Si eliges uno, también se suma a ese ahorro.</div></div>
     <div class="field-m" id="om-dia-wrap" style="display:none;"><label>Se paga con el ingreso del</label><select id="om-dia"><option value="15">Día 15</option><option value="1">Día 1</option></select></div>
     <div class="field-m" id="om-cuotastot-wrap" style="display:none;"><label>Número de cuotas</label><input type="number" id="om-cuotastotales" min="1" value="3"></div>
     <div class="field-m" id="om-cuotafecha-wrap" style="display:none;"><label>Fecha de la primera cuota</label><input type="date" id="om-cuotafecha"><div class="hint">El sistema calcula solo si sale del ingreso del 1 o del 15, y en qué mes termina.</div></div>
@@ -977,17 +979,20 @@ function toggleOtroModalFecha(){
   const tipo = document.getElementById('om-tipo').value;
   const diaWrap = document.getElementById('om-dia-wrap');
   const fechaWrap = document.getElementById('om-fecha-wrap');
+  const ahorroWrap = document.getElementById('om-ahorro-wrap');
   const cuotasTotWrap = document.getElementById('om-cuotastot-wrap');
   const cuotasFechaWrap = document.getElementById('om-cuotafecha-wrap');
   const montoLabel = document.getElementById('om-monto-label');
 
   diaWrap.style.display = 'none';
   fechaWrap.style.display = 'none';
+  ahorroWrap.style.display = 'none';
   cuotasTotWrap.style.display = 'none';
   cuotasFechaWrap.style.display = 'none';
 
   if(tipo==='unico'){
     fechaWrap.style.display = 'block';
+    ahorroWrap.style.display = 'block';
     montoLabel.textContent = 'Monto';
     if(!document.getElementById('om-fecha').value){
       document.getElementById('om-fecha').value = new Date().toISOString().slice(0,10);
@@ -1012,7 +1017,17 @@ function saveOtroModal(){
   let item;
   if(tipo==='unico'){
     const fecha = document.getElementById('om-fecha').value || new Date().toISOString().slice(0,10);
+    const ahorroId = document.getElementById('om-ahorro').value;
     item = {desc, monto, tipo, dia: diaFromFecha(fecha), fecha};
+    if(ahorroId){
+      const ahorro = state.ahorros.find(a=>a.id===ahorroId);
+      if(ahorro){
+        ahorro.saldo += monto;
+        ahorro.movimientos.unshift({fecha, tipo:'deposito', monto});
+        item.origenAhorro = ahorroId;
+        item.desc = `Ahorro: ${ahorro.nombre}`;
+      }
+    }
   } else if(tipo==='fijo'){
     const dia = document.getElementById('om-dia').value;
     item = {desc, monto, tipo, dia};
