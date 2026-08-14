@@ -301,7 +301,8 @@ const DEFAULT_STATE = {
   historial: [],
   deudaSnapshots: [],
   ahorros: [],
-  ahorroPinHash: null
+  ahorroPinHash: null,
+  quincenasCerradas: []
 };
 
 let state = null;
@@ -354,6 +355,7 @@ async function loadState(){
     if(!state.deudaSnapshots) state.deudaSnapshots = [];
     if(!state.ahorros) state.ahorros = [];
     if(state.ahorroPinHash===undefined) state.ahorroPinHash = null;
+    if(!state.quincenasCerradas) state.quincenasCerradas = [];
   } else {
     state = JSON.parse(JSON.stringify(DEFAULT_STATE));
     await sb.from('pagos_estado').insert({ user_id: user.id, data: state });
@@ -445,6 +447,37 @@ function registrarSnapshotDeuda(fecha){
   state.deudaSnapshots.push({ fecha, total });
 }
 
+// ---- Cierre de quincenas (gastos "solo esta vez") ----
+function quincenaCanonica(fecha, dia){
+  const ym = fecha.slice(0,7);
+  return String(dia)==='15' ? `${ym}-15` : `${ym}-01`;
+}
+function estadoQuincena(fecha){
+  return state.quincenasCerradas.find(q=>q.fecha===fecha);
+}
+function cerrarQuincena(fecha){
+  if(!confirm(`¿Cerrar la quincena del ${formatDate(fecha)}? Los gastos "solo esta vez" de esa fecha quedarán bloqueados y no se podrán quitar ni agregar más ahí.`)) return;
+  let q = estadoQuincena(fecha);
+  if(!q){ q = {fecha, cerrada:true, reaberturas:0}; state.quincenasCerradas.push(q); }
+  else { q.cerrada = true; }
+  render(); saveState();
+}
+function reabrirQuincena(fecha){
+  const q = estadoQuincena(fecha);
+  if(!q) return;
+  if(q.reaberturas>=1){ alert('Esta quincena ya se reabrió una vez — no se puede volver a reabrir.'); return; }
+  if(!confirm(`¿Reabrir la quincena del ${formatDate(fecha)}? Solo puedes hacerlo una vez.`)) return;
+  q.cerrada = false;
+  q.reaberturas++;
+  render(); saveState();
+}
+function quincenaBoton(fecha){
+  const q = estadoQuincena(fecha);
+  if(!q || !q.cerrada) return { label:'Cerrar quincena', onclick:`cerrarQuincena('${fecha}')`, disabled:false };
+  if(q.reaberturas<1) return { label:'Reabrir quincena', onclick:`reabrirQuincena('${fecha}')`, disabled:false };
+  return { label:'Quincena cerrada', onclick:'', disabled:true };
+}
+
 function falabellaEstimado(){
   const sumCuotas = state.falabella.compras.reduce((s,c)=> s + (restantes(c)>0 ? c.cuotaMensual : 0), 0);
   return sumCuotas + (state.falabella.otrosCargos||0);
@@ -533,6 +566,9 @@ function renderPaydays(){
   paydayDetalle.falabella = { fecha: pf.fecha, items: pf.items, otrosFijos: otrosFijosF, otrosNoFijos: otrosNoFijosF };
   paydayDetalle.addi = { fecha: pa.fecha, items: pa.items, otrosFijos: otrosFijosA, otrosNoFijos: otrosNoFijosA };
 
+  const bF = quincenaBoton(pf.fecha);
+  const bA = quincenaBoton(pa.fecha);
+
   el.innerHTML = `
     <div class="payday-card">
       <div class="pd-date">${formatDate(pf.fecha)}</div>
@@ -542,6 +578,8 @@ function renderPaydays(){
       ${otros15?`<div class="row"><span>Otros</span><b>${formatCOP(otros15)}</b></div>`:''}
       <div class="margen ${margen15>=0?'pos':'neg'}">Margen: ${formatCOP(margen15)}</div>
       <button class="pd-btn" onclick="verDetallePayday('falabella')">Ver detalles</button>
+      <button class="pd-btn" ${bF.disabled?'disabled':''} onclick="${bF.onclick}">${bF.label}</button>
+      <button class="pd-btn" onclick="cerrarMesFalabella()" ${(!puedeCerrar('falabella')||pf.monto===0)?'disabled':''}>Cerrar mes Falabella</button>
     </div>
     <div class="payday-card">
       <div class="pd-date">${formatDate(pa.fecha)}</div>
@@ -551,6 +589,8 @@ function renderPaydays(){
       ${otros1?`<div class="row"><span>Otros</span><b>${formatCOP(otros1)}</b></div>`:''}
       <div class="margen ${margen1>=0?'pos':'neg'}">Margen: ${formatCOP(margen1)}</div>
       <button class="pd-btn" onclick="verDetallePayday('addi')">Ver detalles</button>
+      <button class="pd-btn" ${bA.disabled?'disabled':''} onclick="${bA.onclick}">${bA.label}</button>
+      <button class="pd-btn" onclick="cerrarMesAddi()" ${(!puedeCerrar('addi')||pa.monto===0)?'disabled':''}>Cerrar mes Addi</button>
     </div>
   `;
 }
@@ -668,11 +708,14 @@ function proximaFechaOtro(o){
 function otroItemHTML(o, i){
   const tipo = o.tipo||'fijo';
   const proxima = formatDate(proximaFechaOtro(o));
-  let meta, extraActions = '';
+  let meta, extraActions = '', bloqueado = false;
   if(tipo==='fijo'){
     meta = `Día ${o.dia} · fijo cada mes · próximo pago: ${proxima}`;
   } else if(tipo==='unico'){
-    meta = `Día ${o.dia} · solo el ${proxima}${o.origenAhorro?' · va a ahorro':''}`;
+    const qFecha = quincenaCanonica(o.fecha, o.dia);
+    const q = estadoQuincena(qFecha);
+    bloqueado = !!(q && q.cerrada);
+    meta = `Día ${o.dia} · solo el ${proxima}${o.origenAhorro?' · va a ahorro':''}${bloqueado?' · 🔒 quincena cerrada':''}`;
   } else {
     meta = `Día ${o.dia} · cuota ${o.cuotasPagadas+1} de ${o.cuotasTotales} · próximo pago: ${proxima}`;
     extraActions = `<span onclick="marcarCuotaOtroPagada(${i})">cuota pagada</span>`;
@@ -681,7 +724,7 @@ function otroItemHTML(o, i){
     <div class="otro-item">
       <div class="oi-head"><span class="oi-desc">${o.desc}</span><span class="oi-amt">${formatCOP(o.monto)}</span></div>
       <div class="oi-meta">${meta}</div>
-      <div class="oi-actions">${extraActions}<span onclick="removeOtro(${i})">quitar</span></div>
+      <div class="oi-actions">${extraActions}${bloqueado?'':`<span onclick="removeOtro(${i})">quitar</span>`}</div>
     </div>`;
 }
 let otrosTab = 'fijo';
@@ -1016,8 +1059,15 @@ function saveOtroModal(){
   let item;
   if(tipo==='unico'){
     const fecha = document.getElementById('om-fecha').value || new Date().toISOString().slice(0,10);
+    const dia = diaFromFecha(fecha);
+    const qFecha = quincenaCanonica(fecha, dia);
+    const q = estadoQuincena(qFecha);
+    if(q && q.cerrada){
+      alert(`La quincena del ${formatDate(qFecha)} ya está cerrada. No puedes agregar gastos ahí.`);
+      closeModal(); return;
+    }
     const ahorroId = document.getElementById('om-ahorro').value;
-    item = {desc, monto, tipo, dia: diaFromFecha(fecha), fecha};
+    item = {desc, monto, tipo, dia, fecha};
     if(ahorroId){
       const ahorro = state.ahorros.find(a=>a.id===ahorroId);
       if(ahorro){
@@ -1042,6 +1092,14 @@ function saveOtroModal(){
 }
 function removeOtro(i){
   const o = state.otros[i];
+  if(o && (o.tipo||'fijo')==='unico'){
+    const qFecha = quincenaCanonica(o.fecha, o.dia);
+    const q = estadoQuincena(qFecha);
+    if(q && q.cerrada){
+      alert(`La quincena del ${formatDate(qFecha)} ya está cerrada. No puedes quitar este gasto.`);
+      return;
+    }
+  }
   if(o && o.origenAhorro){
     const ahorro = state.ahorros.find(a=>a.id===o.origenAhorro);
     if(ahorro){
@@ -1110,10 +1168,17 @@ function saveDeposito(id){
   const monto = parseFloat(document.getElementById('dep-monto').value)||0;
   const fecha = document.getElementById('dep-fecha').value || new Date().toISOString().slice(0,10);
   if(monto<=0){ closeModal(); return; }
+  const dia = diaFromFecha(fecha);
+  const qFecha = quincenaCanonica(fecha, dia);
+  const q = estadoQuincena(qFecha);
+  if(q && q.cerrada){
+    alert(`La quincena del ${formatDate(qFecha)} ya está cerrada. No puedes agregar depósitos ahí.`);
+    closeModal(); return;
+  }
   const movId = 'mv_'+Date.now()+Math.floor(Math.random()*1000);
   ahorro.saldo += monto;
   ahorro.movimientos.unshift({fecha, tipo:'deposito', monto, movId});
-  state.otros.push({ desc:`Ahorro: ${ahorro.nombre}`, monto, tipo:'unico', dia: diaFromFecha(fecha), fecha, origenAhorro:id, movId });
+  state.otros.push({ desc:`Ahorro: ${ahorro.nombre}`, monto, tipo:'unico', dia, fecha, origenAhorro:id, movId });
   closeModal(); render(); saveState();
 }
 
