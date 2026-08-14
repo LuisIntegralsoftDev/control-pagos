@@ -129,9 +129,19 @@
   .proj-card .proj-row{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--ink-soft);padding:4px 0;}
   .proj-card .proj-row b{color:var(--ink);font-weight:600;font-family:'IBM Plex Mono',monospace;font-size:13px;}
   .proj-note{font-size:11.5px;color:var(--ink-soft);margin-top:10px;}
+
+  .loading-screen{position:fixed;inset:0;background:var(--bg);z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;}
+  .loading-screen.hidden{display:none;}
+  .spinner{width:36px;height:36px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--red);animation:spin .8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .loading-text{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.04em;color:var(--ink-soft);}
 </style>
 </head>
 <body>
+<div class="loading-screen" id="loadingScreen">
+  <div class="spinner"></div>
+  <p class="loading-text">Cargando tu control de pagos…</p>
+</div>
 <div class="overlay hidden" id="authOverlay">
   <div class="modal">
     <h3>Ingresar</h3>
@@ -291,6 +301,7 @@ function navTo(name){
 }
 
 async function afterAuth(){
+  document.getElementById('loadingScreen').classList.remove('hidden');
   document.getElementById('authOverlay').classList.add('hidden');
   showView('resumen');
   await loadState();
@@ -298,7 +309,7 @@ async function afterAuth(){
 
 async function loadState(){
   const { data:{ user } } = await sb.auth.getUser();
-  if(!user) return;
+  if(!user){ document.getElementById('loadingScreen').classList.add('hidden'); return; }
   const { data } = await sb.from('pagos_estado').select('data').eq('user_id', user.id).maybeSingle();
   if(data && data.data){
     state = data.data;
@@ -309,6 +320,7 @@ async function loadState(){
     await sb.from('pagos_estado').insert({ user_id: user.id, data: state });
   }
   render();
+  document.getElementById('loadingScreen').classList.add('hidden');
 }
 async function saveState(){
   const { data:{ user } } = await sb.auth.getUser();
@@ -980,7 +992,10 @@ function simular(){
 (async()=>{
   const { data:{ session } } = await sb.auth.getSession();
   if(session){ await afterAuth(); }
-  else { document.getElementById('authOverlay').classList.remove('hidden'); }
+  else {
+    document.getElementById('loadingScreen').classList.add('hidden');
+    document.getElementById('authOverlay').classList.remove('hidden');
+  }
 })();
 
 if('serviceWorker' in navigator){
