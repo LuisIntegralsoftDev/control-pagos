@@ -21,13 +21,18 @@
     --red:#A24132; --red-bg:#F3E0D9;
   }
   *{box-sizing:border-box;}
-  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;padding:22px 16px 90px;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;padding:22px 16px 50px;}
   .wrap{max-width:960px;margin:0 auto;}
 
-  .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--navy);display:flex;z-index:40;box-shadow:0 -2px 14px rgba(0,0,0,.18);padding-bottom:env(safe-area-inset-bottom,0);}
-  .bottom-nav button{flex:1;background:none;border:none;border-top:2px solid transparent;color:#AEB8D1;font-family:'Inter',sans-serif;font-size:11.5px;font-weight:500;padding:12px 4px 10px;cursor:pointer;border-radius:0;}
-  .bottom-nav button.active{color:#FBF1EC;border-top:2px solid #C9705A;font-weight:600;}
-  .bottom-nav button:hover{opacity:1;color:#FBF1EC;}
+  .menu-btn{background:none;border:1px solid var(--line);border-radius:8px;font-size:18px;padding:5px 12px;cursor:pointer;color:var(--navy);line-height:1.4;flex-shrink:0;}
+  .drawer-backdrop{position:fixed;inset:0;background:rgba(20,26,40,.45);z-index:55;opacity:0;pointer-events:none;transition:opacity .2s ease;}
+  .drawer-backdrop.open{opacity:1;pointer-events:auto;}
+  .side-drawer{position:fixed;top:0;left:0;bottom:0;width:230px;background:var(--navy);z-index:60;transform:translateX(-100%);transition:transform .25s ease;padding:22px 16px;display:flex;flex-direction:column;gap:2px;box-shadow:2px 0 16px rgba(0,0,0,.2);}
+  .side-drawer.open{transform:translateX(0);}
+  .side-drawer .drawer-title{font-family:'Fraunces',serif;color:#FBF1EC;font-size:17px;margin-bottom:16px;padding:0 10px;}
+  .side-drawer button{background:none;border:none;color:#AEB8D1;text-align:left;padding:12px 10px;border-radius:8px;font-family:'Inter',sans-serif;font-size:14px;cursor:pointer;}
+  .side-drawer button.active{background:rgba(255,255,255,.1);color:#FBF1EC;font-weight:600;}
+  .side-drawer .drawer-close{margin-top:auto;color:#7C87A3;font-size:12px;}
   .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);margin:0 0 6px;}
   h1{font-family:'Fraunces',serif;font-weight:700;font-size:30px;margin:0 0 6px;color:var(--navy);}
   h2{font-family:'Fraunces',serif;font-size:18px;margin:0;color:var(--navy);}
@@ -116,13 +121,12 @@
   .debt-hero .split div{font-size:12px;opacity:.85;}
   .debt-hero .split b{display:block;font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600;opacity:1;margin-top:2px;}
 
-  .proj-table{width:100%;border-collapse:collapse;font-size:13px;}
-  .proj-table th{text-align:right;font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);font-weight:500;padding:8px 6px;border-bottom:1px solid var(--line);}
-  .proj-table th:first-child,.proj-table td:first-child{text-align:left;}
-  .proj-table td{text-align:right;font-family:'IBM Plex Mono',monospace;padding:9px 6px;border-bottom:1px solid #EFE9D8;}
-  .proj-table tr:last-child td{border-bottom:none;}
-  .proj-table td.mes{font-family:'Inter',sans-serif;font-weight:500;text-transform:capitalize;}
-  .proj-table td.total{font-weight:600;color:var(--navy);}
+  .proj-card{border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:10px;background:var(--paper);}
+  .proj-card .proj-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:6px;}
+  .proj-card .pmes{font-family:'Fraunces',serif;font-weight:600;font-size:15px;color:var(--navy);text-transform:capitalize;}
+  .proj-card .ptotal{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:16px;color:var(--navy);white-space:nowrap;}
+  .proj-card .proj-breakdown{font-size:12.5px;color:var(--ink-soft);margin-bottom:10px;line-height:1.6;}
+  .proj-card .proj-breakdown b{color:var(--ink);font-weight:600;font-family:'IBM Plex Mono',monospace;}
   .proj-note{font-size:11.5px;color:var(--ink-soft);margin-top:10px;}
 </style>
 </head>
@@ -139,12 +143,26 @@
     <p id="auth-msg" style="font-size:12px;color:var(--red);margin-top:10px;"></p>
   </div>
 </div>
+<div class="drawer-backdrop" id="drawerBackdrop" onclick="toggleDrawer()"></div>
+<nav class="side-drawer" id="sideDrawer">
+  <div class="drawer-title">Control de pagos</div>
+  <button data-view="resumen" class="active" onclick="navTo('resumen')">Resumen</button>
+  <button data-view="cuentas" onclick="navTo('cuentas')">Cuentas</button>
+  <button data-view="otros" onclick="navTo('otros')">Otros</button>
+  <button data-view="historial" onclick="navTo('historial')">Historial</button>
+  <button data-view="proyeccion" onclick="navTo('proyeccion')">Proyección</button>
+  <span class="drawer-close" onclick="toggleDrawer()">✕ Cerrar menú</span>
+</nav>
+
 <div class="wrap">
-  <header>
-    <p class="eyebrow">Falabella · Addi · otros</p>
-    <h1>Control de pagos</h1>
-    <p class="totalbar">Deuda total: <b id="tb-deuda">—</b> · Compromiso este mes: <b id="tb-mes">—</b> · <span class="edit-link" style="color:var(--ink-soft);" onclick="logout()">Cerrar sesión</span></p>
+  <header style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+    <div>
+      <p class="eyebrow">Falabella · Addi · otros</p>
+      <h1>Control de pagos</h1>
+    </div>
+    <button class="menu-btn" onclick="toggleDrawer()" aria-label="Abrir menú">☰</button>
   </header>
+  <p class="totalbar">Deuda total: <b id="tb-deuda">—</b> · Compromiso este mes: <b id="tb-mes">—</b> · <span class="edit-link" style="color:var(--ink-soft);" onclick="logout()">Cerrar sesión</span></p>
 
   <section class="view" id="view-resumen">
     <div class="debt-hero" id="debt-hero"></div>
@@ -203,13 +221,6 @@
   <p class="footnote">Los datos quedan guardados en la base de datos. Marca "cuota pagada" en cada compra a medida que avancen los meses, y agrega lo nuevo que compres.</p>
 </div>
 
-<nav class="bottom-nav">
-  <button data-view="resumen" class="active" onclick="showView('resumen')">Resumen</button>
-  <button data-view="cuentas" onclick="showView('cuentas')">Cuentas</button>
-  <button data-view="otros" onclick="showView('otros')">Otros</button>
-  <button data-view="historial" onclick="showView('historial')">Historial</button>
-  <button data-view="proyeccion" onclick="showView('proyeccion')">Proyección</button>
-</nav>
 
 <div class="overlay hidden" id="overlay"><div class="modal" id="modalBody"></div></div>
 
@@ -266,8 +277,16 @@ async function logout(){ await sb.auth.signOut(); location.reload(); }
 
 function showView(name){
   document.querySelectorAll('.view').forEach(v=> v.style.display = (v.id==='view-'+name) ? 'block' : 'none');
-  document.querySelectorAll('.bottom-nav button').forEach(b=> b.classList.toggle('active', b.dataset.view===name));
+  document.querySelectorAll('.side-drawer button[data-view]').forEach(b=> b.classList.toggle('active', b.dataset.view===name));
   window.scrollTo(0,0);
+}
+function toggleDrawer(){
+  document.getElementById('sideDrawer').classList.toggle('open');
+  document.getElementById('drawerBackdrop').classList.toggle('open');
+}
+function navTo(name){
+  showView(name);
+  toggleDrawer();
 }
 
 async function afterAuth(){
@@ -762,25 +781,23 @@ function renderProyeccion(){
   if(projView==='mes'){
     const rows = proyeccionMes(6);
     projRowsMes = rows;
-    el.innerHTML = `
-      <table class="proj-table">
-        <thead><tr><th>Mes</th><th>Falabella</th><th>Addi</th><th>Otros fijos</th><th>Otros no fijos</th><th>Total</th><th></th></tr></thead>
-        <tbody>
-          ${rows.map((r,i)=>`<tr><td class="mes">${r.label}</td><td>${formatCOP(r.falabella)}</td><td>${formatCOP(r.addi)}</td><td>${formatCOP(r.otrosFijos)}</td><td>${formatCOP(r.otrosNoFijos)}</td><td class="total">${formatCOP(r.total)}</td><td><button class="small ghost" onclick="verDetalleMes(${i})">Ver detalles</button></td></tr>`).join('')}
-        </tbody>
-      </table>
-    `;
+    el.innerHTML = rows.map((r,i)=>`
+      <div class="proj-card">
+        <div class="proj-head"><span class="pmes">${r.label}</span><span class="ptotal">${formatCOP(r.total)}</span></div>
+        <div class="proj-breakdown">Falabella <b>${formatCOP(r.falabella)}</b> · Addi <b>${formatCOP(r.addi)}</b> · Otros fijos <b>${formatCOP(r.otrosFijos)}</b>${r.otrosNoFijos?` · Otros no fijos <b>${formatCOP(r.otrosNoFijos)}</b>`:''}</div>
+        <button class="small ghost" onclick="verDetalleMes(${i})">Ver detalles</button>
+      </div>
+    `).join('');
   } else {
     const rows = proyeccionQuincena(12);
     projRowsQuincena = rows;
-    el.innerHTML = `
-      <table class="proj-table">
-        <thead><tr><th>Fecha</th><th>Cuenta</th><th>Cuota</th><th>Otros fijos</th><th>Otros no fijos</th><th>Total</th><th></th></tr></thead>
-        <tbody>
-          ${rows.map((r,i)=>`<tr><td class="mes">${formatDate(r.fecha)}</td><td>${r.cuenta}</td><td>${formatCOP(r.monto)}</td><td>${formatCOP(r.otrosFijos)}</td><td>${formatCOP(r.otrosNoFijos)}</td><td class="total">${formatCOP(r.total)}</td><td><button class="small ghost" onclick="verDetalleQuincena(${i})">Ver detalles</button></td></tr>`).join('')}
-        </tbody>
-      </table>
-    `;
+    el.innerHTML = rows.map((r,i)=>`
+      <div class="proj-card">
+        <div class="proj-head"><span class="pmes">${formatDate(r.fecha)}</span><span class="ptotal">${formatCOP(r.total)}</span></div>
+        <div class="proj-breakdown">${r.cuenta} <b>${formatCOP(r.monto)}</b>${r.otrosFijos?` · Otros fijos <b>${formatCOP(r.otrosFijos)}</b>`:''}${r.otrosNoFijos?` · Otros no fijos <b>${formatCOP(r.otrosNoFijos)}</b>`:''}</div>
+        <button class="small ghost" onclick="verDetalleQuincena(${i})">Ver detalles</button>
+      </div>
+    `).join('');
   }
   note.textContent = 'Calculado con las cuotas activas. "Otros no fijos" solo aparece en el pago más próximo de cada cuenta — no se repite hacia adelante.';
 }
