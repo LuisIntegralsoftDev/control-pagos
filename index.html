@@ -118,7 +118,7 @@
   .otro-item .oi-amt{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:18px;color:var(--navy);white-space:nowrap;}
   .otro-item .oi-meta{font-size:13px;color:var(--ink-soft);}
   .otro-item .oi-actions{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);}
-  .otro-item .oi-actions span{font-size:12px;text-decoration:underline;cursor:pointer;color:var(--ink-soft);}
+  .otro-item .oi-actions span{font-size:12px;text-decoration:underline;cursor:pointer;color:var(--ink-soft);margin-right:16px;}
   .otros-add{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;}
 
   .overlay{position:fixed;inset:0;background:rgba(28,42,70,.45);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50;}
@@ -637,13 +637,24 @@ function renderGrid(){
 function renderOtros(){
   const el = document.getElementById('otros-list');
   if(!state.otros.length){ el.innerHTML = '<p style="font-size:14px;color:var(--ink-soft);">Sin gastos adicionales registrados.</p>'; return; }
-  el.innerHTML = state.otros.map((o,i)=>`
+  el.innerHTML = state.otros.map((o,i)=>{
+    const tipo = o.tipo||'fijo';
+    let meta, extraActions = '';
+    if(tipo==='fijo'){
+      meta = `Día ${o.dia} · fijo cada mes`;
+    } else if(tipo==='unico'){
+      meta = `Día ${o.dia} · solo el ${formatDate(getTargetFecha(o))}`;
+    } else {
+      meta = `Día ${o.dia} · cuota ${o.cuotasPagadas+1} de ${o.cuotasTotales} · desde el ${formatDate(o.fecha)}`;
+      extraActions = `<span onclick="marcarCuotaOtroPagada(${i})">cuota pagada</span>`;
+    }
+    return `
     <div class="otro-item">
       <div class="oi-head"><span class="oi-desc">${o.desc}</span><span class="oi-amt">${formatCOP(o.monto)}</span></div>
-      <div class="oi-meta">Día ${o.dia} · ${(o.tipo||'fijo')==='fijo'?'fijo cada mes':'solo el '+formatDate(getTargetFecha(o))}</div>
-      <div class="oi-actions"><span onclick="removeOtro(${i})">quitar</span></div>
-    </div>
-  `).join('');
+      <div class="oi-meta">${meta}</div>
+      <div class="oi-actions">${extraActions}<span onclick="removeOtro(${i})">quitar</span></div>
+    </div>`;
+  }).join('');
 }
 function renderHistorial(){
   const totalesEl = document.getElementById('hist-totales');
@@ -727,8 +738,19 @@ function itemsAddiCupo(k){
   if(k<0) return [];
   return state.addi.cupo.compras.filter(c=>restantes(c)>k).map(c=>({desc:c.desc, monto:c.cuotaMensual}));
 }
-function itemsOtrosFijos(dia){
-  return state.otros.filter(o=>String(o.dia)===String(dia) && (o.tipo||'fijo')==='fijo').map(o=>({desc:o.desc, monto:o.monto}));
+function itemsOtrosFijos(dia, k=0){
+  return state.otros.filter(o=>{
+    if(String(o.dia)!==String(dia)) return false;
+    const tipo = o.tipo||'fijo';
+    if(tipo==='fijo') return true;
+    if(tipo==='cuotas') return restantes(o) > k;
+    return false;
+  }).map(o=>{
+    if((o.tipo||'fijo')==='cuotas'){
+      return { desc: `${o.desc} (cuota ${o.cuotasPagadas+1} de ${o.cuotasTotales})`, monto: o.cuotaMensual };
+    }
+    return { desc:o.desc, monto:o.monto };
+  });
 }
 function itemsOtrosNoFijosEnFecha(dia, fecha){
   return state.otros.filter(o=>(o.tipo||'fijo')==='unico' && String(o.dia)===String(dia) && getTargetFecha(o)===fecha).map(o=>({desc:o.desc, monto:o.monto}));
@@ -762,7 +784,7 @@ function proyeccionMes(nMeses){
     const itemsA = itemsAddiCupo(kA);
     if(sumAGrande>0) itemsA.push({desc:'Crédito Grande (cuota fija)', monto:sumAGrande});
 
-    const itemsOF = itemsOtrosFijos(15).concat(itemsOtrosFijos(1));
+    const itemsOF = itemsOtrosFijos(15, monthsBetween(nextOccurrence(15), fechaF)).concat(itemsOtrosFijos(1, monthsBetween(nextOccurrence(1), fechaA)));
     const itemsONF = itemsOtrosNoFijosEnMes(15, ym).concat(itemsOtrosNoFijosEnMes(1, ym));
     const otrosFijos = itemsOF.reduce((s,it)=>s+it.monto,0);
     const otrosNoFijos = itemsONF.reduce((s,it)=>s+it.monto,0);
@@ -777,6 +799,7 @@ function proyeccionQuincena(nPeriodos){
   const grandeMeses = (state.addi.grande.esTuyo && state.addi.grande.cuotaFija>0)
     ? Math.ceil(state.addi.grande.pendiente / state.addi.grande.cuotaFija) : 0;
   let fF = nextOccurrence(15), fA = nextOccurrence(1);
+  let kOtros15 = 0, kOtros1 = 0;
   const rows = [];
   for(let i=0;i<nPeriodos;i++){
     if(fF <= fA){
@@ -786,22 +809,24 @@ function proyeccionQuincena(nPeriodos){
       const montoF = sumF + cargosF;
       const itemsF = itemsFalabella(kF);
       if(cargosF>0) itemsF.push({desc:'Intereses + seguro estimados', monto:cargosF});
-      const itemsOF = itemsOtrosFijos(15);
+      const itemsOF = itemsOtrosFijos(15, kOtros15);
       const itemsONF = itemsOtrosNoFijosEnFecha(15, fF);
       rows.push({ fecha: fF, cuenta:'Falabella', monto: montoF, otrosFijos: itemsOF.reduce((s,it)=>s+it.monto,0), otrosNoFijos: itemsONF.reduce((s,it)=>s+it.monto,0),
         detalle: { cuenta: itemsF, otrosFijos: itemsOF, otrosNoFijos: itemsONF } });
       fF = addMonths(fF, 1);
+      kOtros15++;
     } else {
       const kA = state.addi.proximaFecha ? monthsBetween(state.addi.proximaFecha, fA) : 0;
       const sumACupo = kA<0 ? 0 : state.addi.cupo.compras.reduce((s,c)=> s + (restantes(c)>kA ? c.cuotaMensual : 0), 0);
       const sumAGrande = (kA>=0 && kA<grandeMeses) ? state.addi.grande.cuotaFija : 0;
       const itemsA = itemsAddiCupo(kA);
       if(sumAGrande>0) itemsA.push({desc:'Crédito Grande (cuota fija)', monto:sumAGrande});
-      const itemsOF = itemsOtrosFijos(1);
+      const itemsOF = itemsOtrosFijos(1, kOtros1);
       const itemsONF = itemsOtrosNoFijosEnFecha(1, fA);
       rows.push({ fecha: fA, cuenta:'Addi', monto: sumACupo+sumAGrande, otrosFijos: itemsOF.reduce((s,it)=>s+it.monto,0), otrosNoFijos: itemsONF.reduce((s,it)=>s+it.monto,0),
         detalle: { cuenta: itemsA, otrosFijos: itemsOF, otrosNoFijos: itemsONF } });
       fA = addMonths(fA, 1);
+      kOtros1++;
     }
   }
   return rows.map(r=>({ ...r, total: r.monto + r.otrosFijos + r.otrosNoFijos }));
@@ -882,10 +907,16 @@ function openOtroModal(){
   showModal(`
     <h3>Agregar gasto</h3>
     <div class="field-m"><label>Descripción</label><input type="text" id="om-desc" placeholder="Ej: Mercado, imprevisto, arriendo"></div>
-    <div class="field-m"><label>Monto</label><input type="number" id="om-monto" placeholder="Ej: 50000"></div>
-    <div class="field-m"><label>¿Se repite?</label><select id="om-tipo" onchange="toggleOtroModalFecha()"><option value="unico">Solo esta vez</option><option value="fijo">Fijo cada mes</option></select></div>
+    <div class="field-m"><label>¿Se repite?</label><select id="om-tipo" onchange="toggleOtroModalFecha()">
+      <option value="unico">Solo esta vez</option>
+      <option value="fijo">Fijo cada mes</option>
+      <option value="cuotas">A cuotas (con alguien más, no Falabella/Addi)</option>
+    </select></div>
+    <div class="field-m" id="om-monto-wrap"><label id="om-monto-label">Monto</label><input type="number" id="om-monto" placeholder="Ej: 50000"></div>
     <div class="field-m" id="om-fecha-wrap"><label>¿Qué día fue (o va a ser) el gasto?</label><input type="date" id="om-fecha"><div class="hint">El sistema calcula solo si sale del ingreso del 1 o del 15.</div></div>
     <div class="field-m" id="om-dia-wrap" style="display:none;"><label>Se paga con el ingreso del</label><select id="om-dia"><option value="15">Día 15</option><option value="1">Día 1</option></select></div>
+    <div class="field-m" id="om-cuotastot-wrap" style="display:none;"><label>Número de cuotas</label><input type="number" id="om-cuotastotales" min="1" value="3"></div>
+    <div class="field-m" id="om-cuotafecha-wrap" style="display:none;"><label>Fecha de la primera cuota</label><input type="date" id="om-cuotafecha"><div class="hint">El sistema calcula solo si sale del ingreso del 1 o del 15, y en qué mes termina.</div></div>
     <div class="modal-actions"><button class="ghost" onclick="closeModal()">Cancelar</button><button class="primary" onclick="saveOtroModal()">Agregar</button></div>
   `);
   toggleOtroModalFecha();
@@ -894,15 +925,31 @@ function toggleOtroModalFecha(){
   const tipo = document.getElementById('om-tipo').value;
   const diaWrap = document.getElementById('om-dia-wrap');
   const fechaWrap = document.getElementById('om-fecha-wrap');
+  const cuotasTotWrap = document.getElementById('om-cuotastot-wrap');
+  const cuotasFechaWrap = document.getElementById('om-cuotafecha-wrap');
+  const montoLabel = document.getElementById('om-monto-label');
+
+  diaWrap.style.display = 'none';
+  fechaWrap.style.display = 'none';
+  cuotasTotWrap.style.display = 'none';
+  cuotasFechaWrap.style.display = 'none';
+
   if(tipo==='unico'){
-    diaWrap.style.display = 'none';
     fechaWrap.style.display = 'block';
+    montoLabel.textContent = 'Monto';
     if(!document.getElementById('om-fecha').value){
       document.getElementById('om-fecha').value = new Date().toISOString().slice(0,10);
     }
-  } else {
+  } else if(tipo==='fijo'){
     diaWrap.style.display = 'block';
-    fechaWrap.style.display = 'none';
+    montoLabel.textContent = 'Monto';
+  } else {
+    cuotasTotWrap.style.display = 'block';
+    cuotasFechaWrap.style.display = 'block';
+    montoLabel.textContent = 'Cuota mensual';
+    if(!document.getElementById('om-cuotafecha').value){
+      document.getElementById('om-cuotafecha').value = new Date().toISOString().slice(0,10);
+    }
   }
 }
 function saveOtroModal(){
@@ -910,19 +957,29 @@ function saveOtroModal(){
   const monto = parseFloat(document.getElementById('om-monto').value)||0;
   const tipo = document.getElementById('om-tipo').value;
   if(monto<=0){ closeModal(); return; }
-  let dia, fecha;
+  let item;
   if(tipo==='unico'){
-    fecha = document.getElementById('om-fecha').value || new Date().toISOString().slice(0,10);
-    dia = diaFromFecha(fecha);
+    const fecha = document.getElementById('om-fecha').value || new Date().toISOString().slice(0,10);
+    item = {desc, monto, tipo, dia: diaFromFecha(fecha), fecha};
+  } else if(tipo==='fijo'){
+    const dia = document.getElementById('om-dia').value;
+    item = {desc, monto, tipo, dia};
   } else {
-    dia = document.getElementById('om-dia').value;
+    const fecha = document.getElementById('om-cuotafecha').value || new Date().toISOString().slice(0,10);
+    const cuotasTotales = parseInt(document.getElementById('om-cuotastotales').value)||1;
+    item = {desc, monto, tipo, dia: diaFromFecha(fecha), fecha, cuotaMensual: monto, cuotasTotales, cuotasPagadas:0};
   }
-  const item = {desc, monto, dia, tipo};
-  if(tipo==='unico') item.fecha = fecha;
   state.otros.push(item);
   closeModal(); render(); saveState();
 }
 function removeOtro(i){ state.otros.splice(i,1); render(); saveState(); }
+function marcarCuotaOtroPagada(i){
+  const o = state.otros[i];
+  if(!o) return;
+  o.cuotasPagadas++;
+  if(o.cuotasPagadas>=o.cuotasTotales) state.otros.splice(i,1);
+  render(); saveState();
+}
 
 // ---- modales ----
 function showModal(html){ document.getElementById('modalBody').innerHTML = html; document.getElementById('overlay').classList.remove('hidden'); }
