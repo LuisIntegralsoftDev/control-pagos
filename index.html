@@ -162,7 +162,6 @@
   <div class="drawer-title">Control de pagos</div>
   <button data-view="resumen" class="active" onclick="navTo('resumen')">Resumen</button>
   <button data-view="cuentas" onclick="navTo('cuentas')">Cuentas</button>
-  <button data-view="otros" onclick="navTo('otros')">Otros</button>
   <button data-view="historial" onclick="navTo('historial')">Historial</button>
   <button data-view="proyeccion" onclick="navTo('proyeccion')">Proyección</button>
   <button onclick="logout()" style="margin-top:auto;color:#C9705A;">Cerrar sesión</button>
@@ -177,6 +176,8 @@
   <section class="view" id="view-resumen">
     <div class="debt-hero" id="debt-hero"></div>
     <div class="paydays" id="paydays"></div>
+
+    <button class="ghost" style="width:100%;margin-bottom:18px;" onclick="showView('otros')">+ Otros pagos o gastos fijos</button>
 
     <div class="sim">
       <h3>¿Me alcanza para comprar esto?</h3>
