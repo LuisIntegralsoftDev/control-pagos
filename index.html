@@ -32,6 +32,15 @@
   .btn-gastos:hover{opacity:.92;}
   .btn-ingreso{display:block;width:100%;background:var(--sage);color:#F2F7F0;border:none;border-radius:12px;padding:14px 18px;font-family:'Inter',sans-serif;font-weight:700;font-size:14.5px;cursor:pointer;margin:0 0 18px;box-shadow:0 4px 12px rgba(91,122,94,.3);}
   .btn-ingreso:hover{opacity:.92;}
+
+  .ahorro-card{border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:14px;background:var(--paper);}
+  .ahorro-card.destacado{border:2px solid var(--gold);background:linear-gradient(160deg,#FBF1D8 0%,var(--paper) 55%);}
+  .ahorro-card .ah-badge{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--gold);background:var(--gold-bg);padding:3px 9px;border-radius:20px;margin-bottom:10px;}
+  .ahorro-card .ah-nombre{font-family:'Fraunces',serif;font-weight:700;font-size:18px;color:var(--navy);margin-bottom:4px;}
+  .ahorro-card.destacado .ah-nombre{font-size:23px;}
+  .ahorro-card .ah-saldo{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:25px;color:var(--sage);margin-bottom:12px;letter-spacing:.02em;}
+  .ahorro-card .ah-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;}
+  .ahorro-card .ah-hist{margin-top:12px;padding-top:10px;border-top:1px dashed var(--line);max-height:160px;overflow-y:auto;}
   .drawer-backdrop{position:fixed;inset:0;background:rgba(20,26,40,.45);z-index:55;opacity:0;pointer-events:none;transition:opacity .2s ease;}
   .drawer-backdrop.open{opacity:1;pointer-events:auto;}
   .side-drawer{position:fixed;top:0;left:0;bottom:0;width:230px;background:var(--navy);z-index:60;transform:translateX(-100%);transition:transform .25s ease;padding:22px 16px;display:flex;flex-direction:column;gap:2px;box-shadow:2px 0 16px rgba(0,0,0,.2);}
@@ -180,6 +189,7 @@
   <button data-view="resumen" class="active" onclick="navTo('resumen')">Resumen</button>
   <button data-view="cuentas" onclick="navTo('cuentas')">Cuentas</button>
   <button data-view="historial" onclick="navTo('historial')">Historial</button>
+  <button data-view="ahorros" onclick="navTo('ahorros')">Ahorros</button>
   <button data-view="proyeccion" onclick="navTo('proyeccion')">Proyección</button>
   <button onclick="logout()" style="margin-top:auto;color:#C9705A;">Cerrar sesión</button>
 </nav>
@@ -235,6 +245,14 @@
     </div>
   </section>
 
+  <section class="view" id="view-ahorros" style="display:none;">
+    <h2 class="page-title">Ahorros</h2>
+    <p class="page-sub">Aparte de tus cuentas — tú decides cuándo aportar.</p>
+    <button class="btn-ingreso" style="margin-bottom:10px;" onclick="openNuevoAhorroModal()">+ Nuevo ahorro</button>
+    <p style="margin:0 0 16px;"><span class="edit-link" id="ahorro-toggle-link" onclick="toggleAhorroVista()">Mostrar montos</span></p>
+    <div id="ahorros-list"></div>
+  </section>
+
   <section class="view" id="view-proyeccion" style="display:none;">
     <div class="otros-card">
       <h3>Proyección</h3>
@@ -282,7 +300,9 @@ const DEFAULT_STATE = {
   },
   otros: [],
   historial: [],
-  deudaSnapshots: []
+  deudaSnapshots: [],
+  ahorros: [],
+  ahorroPinHash: null
 };
 
 let state = null;
@@ -333,6 +353,8 @@ async function loadState(){
     state = data.data;
     if(!state.historial) state.historial = [];
     if(!state.deudaSnapshots) state.deudaSnapshots = [];
+    if(!state.ahorros) state.ahorros = [];
+    if(state.ahorroPinHash===undefined) state.ahorroPinHash = null;
   } else {
     state = JSON.parse(JSON.stringify(DEFAULT_STATE));
     await sb.from('pagos_estado').insert({ user_id: user.id, data: state });
@@ -454,7 +476,7 @@ function otrosNoFijoEnMes(dia, ymStr){
 }
 function otrosTotal(){ return state.otros.reduce((s,o)=>s+o.monto,0); }
 
-function render(){ renderDebtHero(); renderPaydays(); renderGrid(); renderOtros(); renderHistorial(); renderDeudaChart(); renderProyeccion(); }
+function render(){ renderDebtHero(); renderPaydays(); renderGrid(); renderOtros(); renderHistorial(); renderDeudaChart(); renderAhorros(); renderProyeccion(); }
 
 function renderDebtHero(){
   const f = falabellaPendienteTotal();
@@ -782,11 +804,11 @@ function itemsOtrosFijos(dia, k=0){
     return { desc:o.desc, monto:o.monto };
   });
 }
-function itemsOtrosNoFijosEnFecha(dia, fecha){
-  return state.otros.filter(o=>(o.tipo||'fijo')==='unico' && String(o.dia)===String(dia) && getTargetFecha(o)===fecha).map(o=>({desc:o.desc, monto:o.monto}));
-}
 function itemsOtrosNoFijosEnMes(dia, ym){
   return state.otros.filter(o=>(o.tipo||'fijo')==='unico' && String(o.dia)===String(dia) && getTargetFecha(o).slice(0,7)===ym).map(o=>({desc:o.desc, monto:o.monto}));
+}
+function itemsOtrosNoFijosEnFecha(dia, fecha){
+  return itemsOtrosNoFijosEnMes(dia, fecha.slice(0,7));
 }
 
 function proyeccionMes(nMeses){
@@ -1003,6 +1025,162 @@ function saveOtroModal(){
   closeModal(); render(); saveState();
 }
 function removeOtro(i){ state.otros.splice(i,1); render(); saveState(); }
+
+// ---- Ahorros ----
+async function sha256Hex(text){
+  const enc = new TextEncoder().encode(text);
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+function openNuevoAhorroModal(){
+  showModal(`
+    <h3>Nuevo ahorro</h3>
+    <div class="field-m"><label>Nombre</label><input type="text" id="ah-nombre" placeholder="Ej: Emergencias, Viaje"></div>
+    <div class="field-m"><label>Saldo inicial (opcional)</label><input type="number" id="ah-inicial" placeholder="Ej: 0"></div>
+    <div class="field-m"><label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:13px;"><input type="checkbox" id="ah-destacado" style="width:auto;"> Marcar como el más importante</label></div>
+    <div class="modal-actions"><button class="ghost" onclick="closeModal()">Cancelar</button><button class="primary" onclick="saveNuevoAhorro()">Crear</button></div>
+  `);
+}
+function saveNuevoAhorro(){
+  const nombre = document.getElementById('ah-nombre').value || 'Ahorro';
+  const inicial = parseFloat(document.getElementById('ah-inicial').value)||0;
+  const destacado = document.getElementById('ah-destacado').checked;
+  if(destacado){ state.ahorros.forEach(a=>a.destacado=false); }
+  const item = {
+    id: 'ah_'+Date.now(),
+    nombre, destacado, saldo: inicial,
+    movimientos: inicial>0 ? [{fecha:new Date().toISOString().slice(0,10), tipo:'deposito', monto:inicial}] : []
+  };
+  state.ahorros.push(item);
+  closeModal(); render(); saveState();
+}
+function marcarDestacado(id){
+  state.ahorros.forEach(a=>a.destacado=(a.id===id));
+  render(); saveState();
+}
+function eliminarAhorro(id){
+  if(!confirm('¿Quitar este ahorro? Se pierde todo su historial.')) return;
+  state.ahorros = state.ahorros.filter(a=>a.id!==id);
+  render(); saveState();
+}
+
+function openDepositoModal(id){
+  const today = new Date().toISOString().slice(0,10);
+  showModal(`
+    <h3>Agregar a ahorro</h3>
+    <div class="field-m"><label>Monto</label><input type="number" id="dep-monto" placeholder="Ej: 100000"></div>
+    <div class="field-m"><label>Fecha</label><input type="date" id="dep-fecha" value="${today}"></div>
+    <div class="hint" style="margin-top:-6px;">Se descuenta del margen de esa quincena, como un gasto único — se registra solo si lo agregas.</div>
+    <div class="modal-actions"><button class="ghost" onclick="closeModal()">Cancelar</button><button class="primary" onclick="saveDeposito('${id}')">Guardar</button></div>
+  `);
+}
+function saveDeposito(id){
+  const ahorro = state.ahorros.find(a=>a.id===id);
+  if(!ahorro) return;
+  const monto = parseFloat(document.getElementById('dep-monto').value)||0;
+  const fecha = document.getElementById('dep-fecha').value || new Date().toISOString().slice(0,10);
+  if(monto<=0){ closeModal(); return; }
+  ahorro.saldo += monto;
+  ahorro.movimientos.unshift({fecha, tipo:'deposito', monto});
+  state.otros.push({ desc:`Ahorro: ${ahorro.nombre}`, monto, tipo:'unico', dia: diaFromFecha(fecha), fecha, origenAhorro:id });
+  closeModal(); render(); saveState();
+}
+
+function openRetiroModal(id){
+  const today = new Date().toISOString().slice(0,10);
+  showModal(`
+    <h3>Retirar de ahorro</h3>
+    <div class="field-m"><label>Monto</label><input type="number" id="ret-monto" placeholder="Ej: 50000"></div>
+    <div class="field-m"><label>Fecha</label><input type="date" id="ret-fecha" value="${today}"></div>
+    <div class="modal-actions"><button class="ghost" onclick="closeModal()">Cancelar</button><button class="primary" onclick="saveRetiro('${id}')">Guardar</button></div>
+  `);
+}
+function saveRetiro(id){
+  const ahorro = state.ahorros.find(a=>a.id===id);
+  if(!ahorro) return;
+  const monto = parseFloat(document.getElementById('ret-monto').value)||0;
+  const fecha = document.getElementById('ret-fecha').value || new Date().toISOString().slice(0,10);
+  if(monto<=0){ closeModal(); return; }
+  ahorro.saldo = Math.max(0, ahorro.saldo - monto);
+  ahorro.movimientos.unshift({fecha, tipo:'retiro', monto});
+  closeModal(); render(); saveState();
+}
+
+let ahorrosRevelado = false;
+function toggleAhorroVista(){
+  if(ahorrosRevelado){ ahorrosRevelado = false; renderAhorros(); return; }
+  if(!state.ahorroPinHash){ openSetPinModal(); return; }
+  openAskPinModal();
+}
+function openSetPinModal(){
+  showModal(`
+    <h3>Crea una contraseña para tus ahorros</h3>
+    <div class="field-m"><label>Contraseña</label><input type="password" id="pin-nueva"></div>
+    <div class="hint">La vas a necesitar cada vez que quieras ver los montos.</div>
+    <div class="modal-actions"><button class="ghost" onclick="closeModal()">Cancelar</button><button class="primary" onclick="guardarPinNueva()">Guardar</button></div>
+  `);
+}
+async function guardarPinNueva(){
+  const pin = document.getElementById('pin-nueva').value;
+  if(!pin){ closeModal(); return; }
+  state.ahorroPinHash = await sha256Hex(pin);
+  ahorrosRevelado = true;
+  closeModal(); render(); saveState();
+}
+function openAskPinModal(){
+  showModal(`
+    <h3>Ingresa tu contraseña</h3>
+    <div class="field-m"><input type="password" id="pin-check"></div>
+    <p id="pin-error" style="font-size:12px;color:var(--red);margin:0;"></p>
+    <div class="modal-actions"><button class="ghost" onclick="closeModal()">Cancelar</button><button class="primary" onclick="verificarPin()">Ver montos</button></div>
+  `);
+}
+async function verificarPin(){
+  const pin = document.getElementById('pin-check').value;
+  const hash = await sha256Hex(pin);
+  if(hash===state.ahorroPinHash){
+    ahorrosRevelado = true;
+    closeModal(); render();
+  } else {
+    document.getElementById('pin-error').textContent = 'Contraseña incorrecta.';
+  }
+}
+
+function renderAhorros(){
+  const el = document.getElementById('ahorros-list');
+  const toggleLink = document.getElementById('ahorro-toggle-link');
+  if(!el) return;
+  if(toggleLink) toggleLink.textContent = ahorrosRevelado ? 'Ocultar montos' : 'Mostrar montos';
+
+  if(!state.ahorros.length){
+    el.innerHTML = '<p style="font-size:14px;color:var(--ink-soft);">Aún no tienes ahorros creados.</p>';
+    return;
+  }
+  const ordenados = [...state.ahorros].sort((a,b)=> (b.destacado?1:0)-(a.destacado?1:0));
+  el.innerHTML = ordenados.map(a=>{
+    const saldoTxt = ahorrosRevelado ? formatCOP(a.saldo) : '•••••••';
+    const hist = a.movimientos.slice(0,6).map(m=>{
+      const color = m.tipo==='deposito' ? 'var(--sage)' : 'var(--red)';
+      const signo = m.tipo==='deposito' ? '+' : '−';
+      return `<div class="cp"><div><div class="desc">${m.tipo==='deposito'?'Depósito':'Retiro'}</div><div class="date">${formatDate(m.fecha)}</div></div>
+      <div class="amt" style="color:${color};">${signo} ${ahorrosRevelado ? formatCOP(m.monto) : '•••••'}</div></div>`;
+    }).join('') || '<div class="cp"><span class="date">Sin movimientos</span></div>';
+    return `
+    <div class="ahorro-card ${a.destacado?'destacado':''}">
+      ${a.destacado?'<span class="ah-badge">Principal</span>':''}
+      <div class="ah-nombre">${a.nombre}</div>
+      <div class="ah-saldo">${saldoTxt}</div>
+      <div class="ah-actions">
+        <button class="small primary" onclick="openDepositoModal('${a.id}')">+ Depositar</button>
+        <button class="small ghost" onclick="openRetiroModal('${a.id}')">− Retirar</button>
+        ${!a.destacado?`<button class="small ghost" onclick="marcarDestacado('${a.id}')">Marcar principal</button>`:''}
+        <button class="small ghost" onclick="eliminarAhorro('${a.id}')">Quitar</button>
+      </div>
+      <div class="ah-hist">${hist}</div>
+    </div>`;
+  }).join('');
+}
 function marcarCuotaOtroPagada(i){
   const o = state.otros[i];
   if(!o) return;
