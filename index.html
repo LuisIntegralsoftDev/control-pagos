@@ -135,8 +135,9 @@
     <div class="otros-add">
       <div class="field"><label>Descripción</label><input type="text" id="o-desc" placeholder="Ej: Arriendo, servicios"></div>
       <div class="field"><label>Monto</label><input type="number" id="o-monto" placeholder="Ej: 300000"></div>
-      <div class="field"><label>Se paga con el ingreso del</label><select id="o-dia"><option value="15">Día 15</option><option value="1">Día 1</option></select></div>
-      <div class="field"><label>¿Se repite?</label><select id="o-tipo"><option value="fijo">Fijo cada mes</option><option value="unico">Solo este pago</option></select></div>
+      <div class="field"><label>Se paga con el ingreso del</label><select id="o-dia" onchange="toggleOtroFecha()"><option value="15">Día 15</option><option value="1">Día 1</option></select></div>
+      <div class="field"><label>¿Se repite?</label><select id="o-tipo" onchange="toggleOtroFecha()"><option value="fijo">Fijo cada mes</option><option value="unico">Solo este pago</option></select></div>
+      <div class="field" id="o-fecha-wrap" style="display:none;"><label>¿Para qué fecha?</label><input type="date" id="o-fecha"></div>
       <button class="primary" onclick="addOtro()">Agregar</button>
     </div>
     <div class="compras" id="otros-list"></div>
@@ -269,6 +270,17 @@ function mesLabel(dateStr){
   const d = new Date(dateStr+'T00:00:00');
   return new Intl.DateTimeFormat('es-CO',{month:'long',year:'numeric'}).format(d);
 }
+function monthsBetween(fromISO, toISO){
+  const a = new Date(fromISO+'T00:00:00'), b = new Date(toISO+'T00:00:00');
+  return (b.getFullYear()-a.getFullYear())*12 + (b.getMonth()-a.getMonth());
+}
+function nextOccurrence(diaNum){
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  let d = new Date(hoy.getFullYear(), hoy.getMonth(), diaNum);
+  if(d < hoy) d = new Date(hoy.getFullYear(), hoy.getMonth()+1, diaNum);
+  return d.toISOString().slice(0,10);
+}
+function getTargetFecha(o){ return o.fecha || nextOccurrence(parseInt(o.dia,10)); }
 
 function puedeCerrar(cuenta){
   const cta = cuenta==='falabella' ? state.falabella : state.addi;
@@ -329,7 +341,14 @@ function addiTotalPendiente(){ return addiCupoUsadoTotal()+(state.addi.grande.es
 
 function otrosPorDia(dia){ return state.otros.filter(o=>String(o.dia)===String(dia)).reduce((s,o)=>s+o.monto,0); }
 function otrosPorDiaFijo(dia){ return state.otros.filter(o=>String(o.dia)===String(dia) && (o.tipo||'fijo')==='fijo').reduce((s,o)=>s+o.monto,0); }
-function otrosPorDiaNoFijo(dia){ return state.otros.filter(o=>String(o.dia)===String(dia) && (o.tipo||'fijo')!=='fijo').reduce((s,o)=>s+o.monto,0); }
+function otrosNoFijoEnFecha(dia, fecha){
+  return state.otros.filter(o=>(o.tipo||'fijo')==='unico' && String(o.dia)===String(dia) && getTargetFecha(o)===fecha)
+    .reduce((s,o)=>s+o.monto,0);
+}
+function otrosNoFijoEnMes(dia, ymStr){
+  return state.otros.filter(o=>(o.tipo||'fijo')==='unico' && String(o.dia)===String(dia) && getTargetFecha(o).slice(0,7)===ymStr)
+    .reduce((s,o)=>s+o.monto,0);
+}
 function otrosTotal(){ return state.otros.reduce((s,o)=>s+o.monto,0); }
 
 function render(){ renderTotals(); renderPaydays(); renderGrid(); renderOtros(); renderHistorial(); renderProyeccion(); }
@@ -439,7 +458,7 @@ function renderOtros(){
   const el = document.getElementById('otros-list');
   if(!state.otros.length){ el.innerHTML = '<div class="cp"><span class="date">Sin gastos adicionales registrados</span></div>'; return; }
   el.innerHTML = state.otros.map((o,i)=>`
-    <div class="cp"><div><div class="desc">${o.desc}</div><div class="date">Día ${o.dia} · ${(o.tipo||'fijo')==='fijo'?'fijo cada mes':'solo este pago'}</div></div>
+    <div class="cp"><div><div class="desc">${o.desc}</div><div class="date">Día ${o.dia} · ${(o.tipo||'fijo')==='fijo'?'fijo cada mes':'solo el '+formatDate(getTargetFecha(o))}</div></div>
     <div><div class="amt">${formatCOP(o.monto)}</div><div class="actions"><span onclick="removeOtro(${i})">quitar</span></div></div></div>
   `).join('');
 }
@@ -463,20 +482,27 @@ function setProjView(v){ projView = v; renderProyeccion(); }
 function proyeccionMes(nMeses){
   const grandeMeses = (state.addi.grande.esTuyo && state.addi.grande.cuotaFija>0)
     ? Math.ceil(state.addi.grande.pendiente / state.addi.grande.cuotaFija) : 0;
-  const baseFecha = state.addi.proximaFecha || state.falabella.proximaFecha || new Date().toISOString().slice(0,10);
+  const hoy = new Date(); hoy.setDate(1); hoy.setHours(0,0,0,0);
   const rows = [];
-  for(let k=0;k<nMeses;k++){
-    const sumF = state.falabella.compras.reduce((s,c)=> s + (restantes(c)>k ? c.cuotaMensual : 0), 0);
+  for(let i=0;i<nMeses;i++){
+    const d = new Date(hoy); d.setMonth(d.getMonth()+i);
+    const ym = d.toISOString().slice(0,7);
+    const fechaF = `${ym}-15`;
+    const fechaA = `${ym}-01`;
+
+    const kF = state.falabella.proximaFecha ? monthsBetween(state.falabella.proximaFecha, fechaF) : 0;
+    const sumF = kF<0 ? 0 : state.falabella.compras.reduce((s,c)=> s + (restantes(c)>kF ? c.cuotaMensual : 0), 0);
     const totalF = sumF + (sumF>0 ? (state.falabella.otrosCargos||0) : 0);
 
-    const sumACupo = state.addi.cupo.compras.reduce((s,c)=> s + (restantes(c)>k ? c.cuotaMensual : 0), 0);
-    const sumAGrande = k<grandeMeses ? state.addi.grande.cuotaFija : 0;
+    const kA = state.addi.proximaFecha ? monthsBetween(state.addi.proximaFecha, fechaA) : 0;
+    const sumACupo = kA<0 ? 0 : state.addi.cupo.compras.reduce((s,c)=> s + (restantes(c)>kA ? c.cuotaMensual : 0), 0);
+    const sumAGrande = (kA>=0 && kA<grandeMeses) ? state.addi.grande.cuotaFija : 0;
     const totalA = sumACupo + sumAGrande;
 
     const otrosFijos = otrosPorDiaFijo(15) + otrosPorDiaFijo(1);
-    const otrosNoFijos = k===0 ? (otrosPorDiaNoFijo(15) + otrosPorDiaNoFijo(1)) : 0;
+    const otrosNoFijos = otrosNoFijoEnMes(15, ym) + otrosNoFijoEnMes(1, ym);
 
-    rows.push({ label: mesLabel(addMonths(baseFecha, k)), falabella: totalF, addi: totalA, otrosFijos, otrosNoFijos, total: totalF+totalA+otrosFijos+otrosNoFijos });
+    rows.push({ label: mesLabel(fechaF), falabella: totalF, addi: totalA, otrosFijos, otrosNoFijos, total: totalF+totalA+otrosFijos+otrosNoFijos });
   }
   return rows;
 }
@@ -484,26 +510,24 @@ function proyeccionMes(nMeses){
 function proyeccionQuincena(nPeriodos){
   const grandeMeses = (state.addi.grande.esTuyo && state.addi.grande.cuotaFija>0)
     ? Math.ceil(state.addi.grande.pendiente / state.addi.grande.cuotaFija) : 0;
-  const kMax = Math.ceil(nPeriodos/2)+1;
-  let lista = [];
-  for(let k=0;k<kMax;k++){
-    const sumF = state.falabella.compras.reduce((s,c)=> s + (restantes(c)>k ? c.cuotaMensual : 0), 0);
-    const montoF = sumF + (sumF>0 ? (state.falabella.otrosCargos||0) : 0);
-    lista.push({
-      fecha: addMonths(state.falabella.proximaFecha || new Date().toISOString().slice(0,10), k),
-      cuenta:'Falabella', monto: montoF,
-      otrosFijos: otrosPorDiaFijo(15), otrosNoFijos: k===0 ? otrosPorDiaNoFijo(15) : 0
-    });
-    const sumACupo = state.addi.cupo.compras.reduce((s,c)=> s + (restantes(c)>k ? c.cuotaMensual : 0), 0);
-    const sumAGrande = k<grandeMeses ? state.addi.grande.cuotaFija : 0;
-    lista.push({
-      fecha: addMonths(state.addi.proximaFecha || new Date().toISOString().slice(0,10), k),
-      cuenta:'Addi', monto: sumACupo+sumAGrande,
-      otrosFijos: otrosPorDiaFijo(1), otrosNoFijos: k===0 ? otrosPorDiaNoFijo(1) : 0
-    });
+  let fF = nextOccurrence(15), fA = nextOccurrence(1);
+  const rows = [];
+  for(let i=0;i<nPeriodos;i++){
+    if(fF <= fA){
+      const kF = state.falabella.proximaFecha ? monthsBetween(state.falabella.proximaFecha, fF) : 0;
+      const sumF = kF<0 ? 0 : state.falabella.compras.reduce((s,c)=> s + (restantes(c)>kF ? c.cuotaMensual : 0), 0);
+      const montoF = sumF + (sumF>0 ? (state.falabella.otrosCargos||0) : 0);
+      rows.push({ fecha: fF, cuenta:'Falabella', monto: montoF, otrosFijos: otrosPorDiaFijo(15), otrosNoFijos: otrosNoFijoEnFecha(15, fF) });
+      fF = addMonths(fF, 1);
+    } else {
+      const kA = state.addi.proximaFecha ? monthsBetween(state.addi.proximaFecha, fA) : 0;
+      const sumACupo = kA<0 ? 0 : state.addi.cupo.compras.reduce((s,c)=> s + (restantes(c)>kA ? c.cuotaMensual : 0), 0);
+      const sumAGrande = (kA>=0 && kA<grandeMeses) ? state.addi.grande.cuotaFija : 0;
+      rows.push({ fecha: fA, cuenta:'Addi', monto: sumACupo+sumAGrande, otrosFijos: otrosPorDiaFijo(1), otrosNoFijos: otrosNoFijoEnFecha(1, fA) });
+      fA = addMonths(fA, 1);
+    }
   }
-  lista = lista.filter(r=>r.fecha).sort((a,b)=> a.fecha.localeCompare(b.fecha)).slice(0, nPeriodos);
-  return lista.map(r=>({ ...r, total: r.monto + r.otrosFijos + r.otrosNoFijos }));
+  return rows.map(r=>({ ...r, total: r.monto + r.otrosFijos + r.otrosNoFijos }));
 }
 
 function renderProyeccion(){
@@ -535,14 +559,26 @@ function renderProyeccion(){
   }
   note.textContent = 'Calculado con las cuotas activas. "Otros no fijos" solo aparece en el pago más próximo de cada cuenta — no se repite hacia adelante.';
 }
+function toggleOtroFecha(){
+  const tipo = document.getElementById('o-tipo').value;
+  const wrap = document.getElementById('o-fecha-wrap');
+  const dia = document.getElementById('o-dia').value;
+  wrap.style.display = tipo==='unico' ? 'flex' : 'none';
+  if(tipo==='unico' && !document.getElementById('o-fecha').value){
+    document.getElementById('o-fecha').value = nextOccurrence(parseInt(dia,10));
+  }
+}
 function addOtro(){
   const desc = document.getElementById('o-desc').value || 'Gasto';
   const monto = parseFloat(document.getElementById('o-monto').value)||0;
   const dia = document.getElementById('o-dia').value;
   const tipo = document.getElementById('o-tipo').value;
+  const fecha = document.getElementById('o-fecha').value;
   if(monto<=0) return;
-  state.otros.push({desc, monto, dia, tipo});
-  document.getElementById('o-desc').value=''; document.getElementById('o-monto').value='';
+  const item = {desc, monto, dia, tipo};
+  if(tipo==='unico' && fecha) item.fecha = fecha;
+  state.otros.push(item);
+  document.getElementById('o-desc').value=''; document.getElementById('o-monto').value=''; document.getElementById('o-fecha').value='';
   render(); saveState();
 }
 function removeOtro(i){ state.otros.splice(i,1); render(); saveState(); }
