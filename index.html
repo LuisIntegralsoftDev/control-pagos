@@ -130,6 +130,12 @@
     <div class="compras" id="otros-list"></div>
   </div>
 
+  <div class="otros-card">
+    <h3>Historial mensual</h3>
+    <p class="totalbar" id="hist-totales" style="margin-bottom:12px;">—</p>
+    <div class="compras" id="hist-list" style="max-height:260px;"></div>
+  </div>
+
   <div class="sim">
     <h3>¿Me alcanza para comprar esto?</h3>
     <div class="fields">
@@ -174,7 +180,8 @@ const DEFAULT_STATE = {
       compras: []
     }
   },
-  otros: []
+  otros: [],
+  historial: []
 };
 
 let state = null;
@@ -207,6 +214,7 @@ async function loadState(){
   const { data } = await sb.from('pagos_estado').select('data').eq('user_id', user.id).maybeSingle();
   if(data && data.data){
     state = data.data;
+    if(!state.historial) state.historial = [];
   } else {
     state = JSON.parse(JSON.stringify(DEFAULT_STATE));
     await sb.from('pagos_estado').insert({ user_id: user.id, data: state });
@@ -228,6 +236,41 @@ function statusLabel(days){ if(days===null) return 'Sin fecha'; if(days<0) retur
 function restantes(c){ return Math.max(0, c.cuotasTotales - c.cuotasPagadas); }
 function pendienteCompra(c){ return round2(c.cuotaMensual * restantes(c)); }
 function round2(n){ return Math.round(n*100)/100; }
+function addMonths(dateStr, n){
+  if(!dateStr) return '';
+  const d = new Date(dateStr+'T00:00:00');
+  d.setMonth(d.getMonth()+n);
+  return d.toISOString().slice(0,10);
+}
+function mesLabel(dateStr){
+  if(!dateStr) return '';
+  const d = new Date(dateStr+'T00:00:00');
+  return new Intl.DateTimeFormat('es-CO',{month:'long',year:'numeric'}).format(d);
+}
+
+function cerrarMesFalabella(){
+  if(!confirm(`¿Ya pagaste ${formatCOP(falabellaUsado())} de Falabella? Esto archiva el mes y avanza las cuotas.`)) return;
+  const monto = falabellaUsado();
+  const hoy = new Date().toISOString().slice(0,10);
+  state.historial.unshift({ cuenta:'falabella', fecha:hoy, monto });
+  state.falabella.compras.forEach(c=>{ if(restantes(c)>0) c.cuotasPagadas++; });
+  state.falabella.compras = state.falabella.compras.filter(c=>restantes(c)>0);
+  state.falabella.confirmado = null;
+  state.falabella.proximaFecha = addMonths(state.falabella.proximaFecha, 1);
+  render(); saveState();
+}
+function cerrarMesAddi(){
+  if(!confirm(`¿Ya pagaste ${formatCOP(addiUsado())} de Addi? Esto archiva el mes y avanza las cuotas.`)) return;
+  const monto = addiUsado();
+  const hoy = new Date().toISOString().slice(0,10);
+  state.historial.unshift({ cuenta:'addi', fecha:hoy, monto });
+  state.addi.cupo.compras.forEach(c=>{ if(restantes(c)>0) c.cuotasPagadas++; });
+  state.addi.cupo.compras = state.addi.cupo.compras.filter(c=>restantes(c)>0);
+  if(state.addi.grande.esTuyo){ state.addi.grande.pendiente = Math.max(0, state.addi.grande.pendiente - state.addi.grande.cuotaFija); }
+  state.addi.confirmado = null;
+  state.addi.proximaFecha = addMonths(state.addi.proximaFecha, 1);
+  render(); saveState();
+}
 
 function falabellaEstimado(){
   const sumCuotas = state.falabella.compras.reduce((s,c)=> s + (restantes(c)>0 ? c.cuotaMensual : 0), 0);
@@ -250,7 +293,7 @@ function addiTotalPendiente(){ return addiCupoUsadoTotal()+(state.addi.grande.es
 function otrosPorDia(dia){ return state.otros.filter(o=>String(o.dia)===String(dia)).reduce((s,o)=>s+o.monto,0); }
 function otrosTotal(){ return state.otros.reduce((s,o)=>s+o.monto,0); }
 
-function render(){ renderTotals(); renderPaydays(); renderGrid(); renderOtros(); }
+function render(){ renderTotals(); renderPaydays(); renderGrid(); renderOtros(); renderHistorial(); }
 
 function renderTotals(){
   document.getElementById('tb-deuda').textContent = formatCOP(falabellaPendienteTotal()+addiTotalPendiente());
@@ -319,6 +362,7 @@ function renderGrid(){
       <div class="btn-row">
         <button class="primary small" onclick="openCompra('falabella')">+ Compra</button>
         <button class="ghost small" onclick="openAjustesFalabella()">Ajustes / confirmar con extracto</button>
+        <button class="ghost small" onclick="cerrarMesFalabella()">Cerrar mes</button>
       </div>
       <div class="sub"><div class="sub-title">Compras activas</div><div class="compras">${comprasHTML('falabella', f.compras)}</div></div>
     </div>
@@ -330,7 +374,10 @@ function renderGrid(){
       <div class="meta-row"><span>Próximo pago (confirmado app)</span><b>${formatCOP(addiUsado())}</b></div>
       <div class="meta-row"><span>Estimado por cuotas</span><b>${formatCOP(addiEstimado())}</b></div>
       <div class="meta-row"><span>Fecha</span><b>${formatDate(a.proximaFecha)}</b></div>
-      <div class="btn-row"><button class="ghost small" onclick="openAjustesAddi()">Ajustes / confirmar con app</button></div>
+      <div class="btn-row">
+        <button class="ghost small" onclick="openAjustesAddi()">Ajustes / confirmar con app</button>
+        <button class="ghost small" onclick="cerrarMesAddi()">Cerrar mes</button>
+      </div>
       <div class="sub">
         <div class="sub-title">Crédito Grande ${a.grande.esTuyo?'':'· de tu amigo, no cuenta en tus totales'}</div>
         <div class="meta-row"><span>Pendiente</span><b>${formatCOP(a.grande.pendiente)}</b></div>
@@ -353,6 +400,19 @@ function renderOtros(){
     <div><div class="amt">${formatCOP(o.monto)}</div><div class="actions"><span onclick="removeOtro(${i})">quitar</span></div></div></div>
   `).join('');
 }
+function renderHistorial(){
+  const totalesEl = document.getElementById('hist-totales');
+  const totalF = state.historial.filter(h=>h.cuenta==='falabella').reduce((s,h)=>s+h.monto,0);
+  const totalA = state.historial.filter(h=>h.cuenta==='addi').reduce((s,h)=>s+h.monto,0);
+  totalesEl.innerHTML = `Pagado histórico: Falabella <b>${formatCOP(totalF)}</b> · Addi <b>${formatCOP(totalA)}</b>`;
+  const el = document.getElementById('hist-list');
+  if(!state.historial.length){ el.innerHTML = '<div class="cp"><span class="date">Aún no has cerrado ningún mes</span></div>'; return; }
+  el.innerHTML = state.historial.map((h,i)=>`
+    <div class="cp"><div><div class="desc">${h.cuenta==='falabella'?'Falabella':'Addi'} · ${mesLabel(h.fecha)}</div><div class="date">Cerrado el ${formatDate(h.fecha)}</div></div>
+    <div><div class="amt">${formatCOP(h.monto)}</div><div class="actions"><span onclick="removeHistorial(${i})">quitar</span></div></div></div>
+  `).join('');
+}
+function removeHistorial(i){ state.historial.splice(i,1); render(); saveState(); }
 function addOtro(){
   const desc = document.getElementById('o-desc').value || 'Gasto';
   const monto = parseFloat(document.getElementById('o-monto').value)||0;
