@@ -53,10 +53,12 @@
   .payday-card{background:var(--navy);color:#F6F2E9;border-radius:10px;padding:16px 18px;}
   .payday-card .pd-btn{display:block;width:100%;margin-top:12px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.3);color:#FBF1EC;border-radius:8px;padding:9px 10px;font-family:'Inter',sans-serif;font-size:12.5px;font-weight:500;cursor:pointer;}
   .payday-card .pd-btn:hover{background:rgba(255,255,255,.16);}
-  .payday-card .day{font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.06em;opacity:.65;}
-  .payday-card .row{display:flex;justify-content:space-between;margin-top:7px;font-size:13px;}
+  .payday-card .pd-date{font-family:'Fraunces',serif;font-weight:700;font-size:21px;margin:0 0 2px;}
+  .payday-card .pd-label{font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.06em;opacity:.65;margin-bottom:14px;}
+  .payday-card .row{display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-top:1px solid rgba(255,255,255,.1);}
+  .payday-card .row:first-of-type{border-top:none;}
   .payday-card .row b{font-family:'IBM Plex Mono',monospace;}
-  .payday-card .margen{font-family:'Fraunces',serif;font-size:22px;font-weight:600;margin-top:10px;}
+  .payday-card .margen{font-family:'Fraunces',serif;font-size:22px;font-weight:600;margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.18);}
   .payday-card .margen.neg{color:#E8998A;}
   .payday-card .margen.pos{color:#B9D6BB;}
   .payday-card .edit-link{font-size:11px;opacity:.7;cursor:pointer;text-decoration:underline;margin-top:6px;display:inline-block;margin-right:10px;}
@@ -512,7 +514,8 @@ function renderPaydays(){
 
   el.innerHTML = `
     <div class="payday-card">
-      <div class="day">${formatDate(pf.fecha)} (día 15) · Falabella${otros15?' + otros':''}</div>
+      <div class="pd-date">${formatDate(pf.fecha)}</div>
+      <div class="pd-label">Falabella${otros15?' + otros':''}</div>
       <div class="row"><span>Ingreso</span><b>${formatCOP(state.income.day15)}</b></div>
       <div class="row"><span>Falabella</span><b>${formatCOP(pf.monto)}</b></div>
       ${otros15?`<div class="row"><span>Otros</span><b>${formatCOP(otros15)}</b></div>`:''}
@@ -520,7 +523,8 @@ function renderPaydays(){
       <button class="pd-btn" onclick="verDetallePayday('falabella')">Ver detalles</button>
     </div>
     <div class="payday-card">
-      <div class="day">${formatDate(pa.fecha)} (día 1) · Addi${otros1?' + otros':''}</div>
+      <div class="pd-date">${formatDate(pa.fecha)}</div>
+      <div class="pd-label">Addi${otros1?' + otros':''}</div>
       <div class="row"><span>Ingreso</span><b>${formatCOP(state.income.day1)}</b></div>
       <div class="row"><span>Addi</span><b>${formatCOP(pa.monto)}</b></div>
       ${otros1?`<div class="row"><span>Otros</span><b>${formatCOP(otros1)}</b></div>`:''}
