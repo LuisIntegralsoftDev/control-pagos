@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Control de pagos</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+  :root{
+    --bg:#F6F2E9; --paper:#FFFDF8; --ink:#232739; --ink-soft:#6B6759;
+    --navy:#1C2A46; --line:#DFD6BE;
+    --sage:#5B7A5E; --sage-bg:#E7EEE3;
+    --gold:#B4842A; --gold-bg:#F5EAD3;
+    --red:#A24132; --red-bg:#F3E0D9;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;padding:26px 16px 80px;}
+  .wrap{max-width:960px;margin:0 auto;}
+  .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);margin:0 0 6px;}
+  h1{font-family:'Fraunces',serif;font-weight:700;font-size:30px;margin:0 0 6px;color:var(--navy);}
+  h2{font-family:'Fraunces',serif;font-size:18px;margin:0;color:var(--navy);}
+  h3{font-family:'Fraunces',serif;margin:0 0 14px;color:var(--navy);font-size:19px;}
+
+  .totalbar{font-size:13px;color:var(--ink-soft);margin-bottom:18px;}
+  .totalbar b{color:var(--navy);font-family:'IBM Plex Mono',monospace;}
+
+  .paydays{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px;}
+  @media(max-width:620px){.paydays{grid-template-columns:1fr;}}
+  .payday-card{background:var(--navy);color:#F6F2E9;border-radius:10px;padding:16px 18px;}
+  .payday-card .day{font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.06em;opacity:.65;}
+  .payday-card .row{display:flex;justify-content:space-between;margin-top:7px;font-size:13px;}
+  .payday-card .row b{font-family:'IBM Plex Mono',monospace;}
+  .payday-card .margen{font-family:'Fraunces',serif;font-size:22px;font-weight:600;margin-top:10px;}
+  .payday-card .margen.neg{color:#E8998A;}
+  .payday-card .margen.pos{color:#B9D6BB;}
+  .payday-card .edit-link{font-size:11px;opacity:.7;cursor:pointer;text-decoration:underline;margin-top:6px;display:inline-block;margin-right:10px;}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px;}
+  @media(max-width:680px){.grid{grid-template-columns:1fr;}}
+
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:20px 20px 16px;}
+  .card-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;}
+  .pill{font-family:'IBM Plex Mono',monospace;font-size:11px;padding:3px 9px;border-radius:20px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;}
+  .pill.ok{background:var(--sage-bg);color:var(--sage);}
+  .pill.soon{background:var(--gold-bg);color:var(--gold);}
+  .pill.due{background:var(--red-bg);color:var(--red);}
+  .pill.na{background:#EFE9D8;color:var(--ink-soft);}
+
+  .balance{font-family:'IBM Plex Mono',monospace;font-size:26px;font-weight:600;margin:10px 0 2px;}
+  .balance-label{font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px;}
+  .meta-row{display:flex;justify-content:space-between;font-size:13px;color:var(--ink-soft);margin-bottom:4px;}
+  .meta-row b{color:var(--ink);font-weight:600;}
+  .sub{margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);}
+  .sub-title{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);margin-bottom:8px;}
+
+  .btn-row{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;}
+  button{font-family:'Inter',sans-serif;font-size:13px;font-weight:500;border:1px solid var(--navy);background:transparent;color:var(--navy);padding:7px 12px;border-radius:7px;cursor:pointer;}
+  button.primary{background:var(--navy);color:#fff;}
+  button.ghost{border-color:var(--line);color:var(--ink-soft);}
+  button.small{padding:4px 9px;font-size:12px;}
+  button:hover{opacity:.85;}
+
+  .compras{max-height:190px;overflow-y:auto;}
+  .cp{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;padding:6px 0;border-bottom:1px solid #EFE9D8;}
+  .cp:last-child{border-bottom:none;}
+  .cp .desc{color:var(--ink);}
+  .cp .date{color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;font-size:11px;}
+  .cp .amt{font-family:'IBM Plex Mono',monospace;font-weight:600;text-align:right;}
+  .cp .cuotas{color:var(--ink-soft);font-size:11px;text-align:right;}
+  .cp .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:2px;}
+  .cp .actions span{font-size:10.5px;text-decoration:underline;cursor:pointer;color:var(--ink-soft);}
+
+  .sim{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:18px;}
+  .sim .fields{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px;}
+  .field{display:flex;flex-direction:column;gap:4px;}
+  .field label{font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;}
+  .field input,.field select{padding:8px 10px;border:1px solid var(--line);border-radius:7px;font-family:'Inter',sans-serif;font-size:14px;background:#fff;color:var(--ink);}
+  .sim-result{padding:14px 16px;border-radius:9px;font-size:14px;line-height:1.5;}
+  .sim-result.pos{background:var(--sage-bg);color:#3E5940;}
+  .sim-result.neg{background:var(--red-bg);color:#7A2E22;}
+  .sim-result b{font-family:'IBM Plex Mono',monospace;}
+  .sim-note{font-size:11.5px;color:var(--ink-soft);margin-top:8px;}
+
+  .otros-card{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:18px;}
+  .otros-add{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;}
+
+  .overlay{position:fixed;inset:0;background:rgba(28,42,70,.45);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50;}
+  .overlay.hidden{display:none;}
+  .modal{background:var(--paper);border-radius:12px;padding:24px;max-width:400px;width:100%;border:1px solid var(--line);max-height:90vh;overflow-y:auto;}
+  .field-m{margin-bottom:12px;}
+  .field-m label{display:block;font-size:12px;color:var(--ink-soft);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em;}
+  .field-m input,.field-m select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:7px;font-family:'Inter',sans-serif;font-size:14px;background:#fff;color:var(--ink);}
+  .field-m .hint{font-size:11px;color:var(--ink-soft);margin-top:3px;}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;}
+  .footnote{text-align:center;font-size:12px;color:var(--ink-soft);margin-top:30px;}
+</style>
+</head>
+<body>
+<div class="overlay hidden" id="authOverlay">
+  <div class="modal">
+    <h3>Ingresar</h3>
+    <div class="field-m"><label>Correo</label><input type="email" id="auth-email"></div>
+    <div class="field-m"><label>Contraseña</label><input type="password" id="auth-pass"></div>
+    <div class="modal-actions">
+      <button class="ghost" onclick="signUp()">Crear cuenta</button>
+      <button class="primary" onclick="signIn()">Entrar</button>
+    </div>
+    <p id="auth-msg" style="font-size:12px;color:var(--red);margin-top:10px;"></p>
+  </div>
+</div>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Falabella · Addi · otros</p>
+    <h1>Control de pagos</h1>
+    <p class="totalbar">Deuda total: <b id="tb-deuda">—</b> · Compromiso este mes (Falabella + Addi + otros): <b id="tb-mes">—</b> · <span class="edit-link" style="color:var(--ink-soft);" onclick="logout()">Cerrar sesión</span></p>
+  </header>
+
+  <div class="paydays" id="paydays"></div>
+  <div class="grid" id="grid"></div>
+
+  <div class="otros-card">
+    <h3>Otros pagos o gastos fijos</h3>
+    <div class="otros-add">
+      <div class="field"><label>Descripción</label><input type="text" id="o-desc" placeholder="Ej: Arriendo, servicios"></div>
+      <div class="field"><label>Monto</label><input type="number" id="o-monto" placeholder="Ej: 300000"></div>
+      <div class="field"><label>Se paga con el ingreso del</label><select id="o-dia"><option value="15">Día 15</option><option value="1">Día 1</option></select></div>
+      <button class="primary" onclick="addOtro()">Agregar</button>
+    </div>
+    <div class="compras" id="otros-list"></div>
+  </div>
+
+  <div class="sim">
+    <h3>¿Me alcanza para comprar esto?</h3>
+    <div class="fields">
+      <div class="field"><label>Cuenta</label><select id="sim-cuenta"><option value="falabella">Falabella</option><option value="addi">Addi</option></select></div>
+      <div class="field"><label>Monto</label><input type="number" id="sim-monto" placeholder="Ej: 150000"></div>
+      <div class="field"><label>Cuotas</label><input type="number" id="sim-cuotas" value="1" min="1"></div>
+      <button class="primary" onclick="simular()">Calcular</button>
+    </div>
+    <div id="sim-out"></div>
+    <p class="sim-note">Estimado dividiendo el monto entre las cuotas, sin intereses — tu cuota real suele quedar un poco más alta.</p>
+  </div>
+
+  <p class="footnote">Los datos quedan guardados en este navegador. Marca "cuota pagada" en cada compra a medida que avancen los meses, y agrega lo nuevo que compres.</p>
+</div>
+
+<div class="overlay hidden" id="overlay"><div class="modal" id="modalBody"></div></div>
+
+<script>
+// ====== CONFIGURA ESTO CON TUS DATOS DE SUPABASE ======
+const SUPABASE_URL = 'https://cxvmueaztvunruhdujhg.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN4dm11ZWF6dHZ1bnJ1aGR1amhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY3Mjc5NzQsImV4cCI6MjEwMjMwMzk3NH0.sHSnjzXjMZFKH6igCaZGQaGyWbuvFLBfYtqvxhlwVRM';
+// ========================================================
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const DEFAULT_STATE = {
+  income: { day15: 1680000, day1: 1680000 },
+  falabella: {
+    balance: 1223742.03,
+    available: 376257.97,
+    cutDay: 29,
+    proximaFecha: '2026-09-15',
+    otrosCargos: 20556.44,
+    confirmado: null,
+    compras: [
+      { desc:'Seguro AV Falabella', date:'2026-06-18', valor:349994, cuotasTotales:6, cuotasPagadas:2, cuotaMensual:12111.62 },
+      { desc:'Falabella.com', date:'2026-07-03', valor:305900, cuotasTotales:6, cuotasPagadas:1, cuotaMensual:50983.33 },
+      { desc:'Falabella.com', date:'2026-07-09', valor:145900, cuotasTotales:3, cuotasPagadas:1, cuotaMensual:48633.33 },
+      { desc:'Temu', date:'2026-07-10', valor:160074, cuotasTotales:5, cuotasPagadas:1, cuotaMensual:32014.80 },
+      { desc:'Temu', date:'2026-07-10', valor:15005, cuotasTotales:2, cuotasPagadas:1, cuotaMensual:7502.50 },
+      { desc:'Falabella.com', date:'2026-07-21', valor:709900, cuotasTotales:6, cuotasPagadas:1, cuotaMensual:118316.66 },
+      { desc:'Internet Tigo', date:'2026-08-10', valor:100000, cuotasTotales:2, cuotasPagadas:0, cuotaMensual:50000 }
+    ]
+  },
+  addi: {
+    proximaFecha: '2026-09-01',
+    confirmado: 648008,
+    grande: { pendiente: 2444723, cuotaFija: 205000, esTuyo: false },
+    cupo: {
+      disponible: 620035,
+      compras: [
+        { desc:'Compra Cupo', date:'2026-08-01', valor:120400, cuotasTotales:3, cuotasPagadas:0, cuotaMensual:40133.33 },
+        { desc:'Compra Cupo', date:'2026-08-01', valor:829000, cuotasTotales:6, cuotasPagadas:0, cuotaMensual:138166.67 },
+        { desc:'Compra Cupo', date:'2026-07-05', valor:325000, cuotasTotales:4, cuotasPagadas:0, cuotaMensual:81250 },
+        { desc:'Compra Cupo', date:'2026-06-20', valor:207836, cuotasTotales:2, cuotasPagadas:1, cuotaMensual:105565 }
+      ]
+    }
+  },
+  otros: []
+};
+
+let state = null;
+
+async function signIn(){
+  const email = document.getElementById('auth-email').value;
+  const password = document.getElementById('auth-pass').value;
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if(error){ document.getElementById('auth-msg').style.color='var(--red)'; document.getElementById('auth-msg').textContent = error.message; return; }
+  await afterAuth();
+}
+async function signUp(){
+  const email = document.getElementById('auth-email').value;
+  const password = document.getElementById('auth-pass').value;
+  const { error } = await sb.auth.signUp({ email, password });
+  if(error){ document.getElementById('auth-msg').style.color='var(--red)'; document.getElementById('auth-msg').textContent = error.message; return; }
+  document.getElementById('auth-msg').style.color='var(--sage)';
+  document.getElementById('auth-msg').textContent = 'Cuenta creada. Si te pide confirmar el correo, revisa tu bandeja; si no, ya puedes tocar "Entrar".';
+}
+async function logout(){ await sb.auth.signOut(); location.reload(); }
+
+async function afterAuth(){
+  document.getElementById('authOverlay').classList.add('hidden');
+  await loadState();
+}
+
+async function loadState(){
+  const { data:{ user } } = await sb.auth.getUser();
+  if(!user) return;
+  const { data } = await sb.from('pagos_estado').select('data').eq('user_id', user.id).maybeSingle();
+  if(data && data.data){
+    state = data.data;
+  } else {
+    state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+    await sb.from('pagos_estado').insert({ user_id: user.id, data: state });
+  }
+  render();
+}
+async function saveState(){
+  const { data:{ user } } = await sb.auth.getUser();
+  if(!user) return;
+  await sb.from('pagos_estado').update({ data: state, updated_at: new Date().toISOString() }).eq('user_id', user.id);
+}
+
+function formatCOP(n){ return new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(n||0); }
+function formatDate(d){ if(!d) return 'sin definir'; const dt=new Date(d+'T00:00:00'); return new Intl.DateTimeFormat('es-CO',{day:'numeric',month:'long'}).format(dt); }
+function daysUntil(d){ if(!d) return null; const t=new Date(); t.setHours(0,0,0,0); const due=new Date(d+'T00:00:00'); return Math.round((due-t)/86400000); }
+function statusFor(days){ if(days===null) return 'na'; if(days<0) return 'due'; if(days<=5) return 'soon'; return 'ok'; }
+function statusLabel(days){ if(days===null) return 'Sin fecha'; if(days<0) return `Vencido ${Math.abs(days)}d`; if(days===0) return 'Vence hoy'; return `Vence en ${days}d`; }
+
+function restantes(c){ return Math.max(0, c.cuotasTotales - c.cuotasPagadas); }
+function pendienteCompra(c){ return round2(c.cuotaMensual * restantes(c)); }
+function round2(n){ return Math.round(n*100)/100; }
+
+function falabellaEstimado(){
+  const sumCuotas = state.falabella.compras.reduce((s,c)=> s + (restantes(c)>0 ? c.cuotaMensual : 0), 0);
+  return sumCuotas + (state.falabella.otrosCargos||0);
+}
+function falabellaUsado(){ return state.falabella.confirmado!==null ? state.falabella.confirmado : falabellaEstimado(); }
+function falabellaPendienteTotal(){ return state.falabella.compras.reduce((s,c)=>s+pendienteCompra(c),0); }
+
+function addiCupoEstimado(){ return state.addi.cupo.compras.reduce((s,c)=> s + (restantes(c)>0 ? c.cuotaMensual : 0), 0); }
+function addiEstimado(){ return addiCupoEstimado() + (state.addi.grande.esTuyo ? state.addi.grande.cuotaFija : 0); }
+function addiUsado(){
+  if(state.addi.confirmado!==null){
+    return state.addi.confirmado - (state.addi.grande.esTuyo ? 0 : state.addi.grande.cuotaFija);
+  }
+  return addiEstimado();
+}
+function addiCupoUsadoTotal(){ return state.addi.cupo.compras.reduce((s,c)=>s+pendienteCompra(c),0); }
+function addiTotalPendiente(){ return addiCupoUsadoTotal()+(state.addi.grande.esTuyo?state.addi.grande.pendiente:0); }
+
+function otrosPorDia(dia){ return state.otros.filter(o=>String(o.dia)===String(dia)).reduce((s,o)=>s+o.monto,0); }
+function otrosTotal(){ return state.otros.reduce((s,o)=>s+o.monto,0); }
+
+function render(){ renderTotals(); renderPaydays(); renderGrid(); renderOtros(); }
+
+function renderTotals(){
+  document.getElementById('tb-deuda').textContent = formatCOP(falabellaPendienteTotal()+addiTotalPendiente());
+  document.getElementById('tb-mes').textContent = formatCOP(falabellaUsado()+addiUsado()+otrosTotal());
+}
+
+function renderPaydays(){
+  const el = document.getElementById('paydays');
+  const compF = falabellaUsado() + otrosPorDia(15);
+  const compA = addiUsado() + otrosPorDia(1);
+  const margen15 = state.income.day15 - compF;
+  const margen1 = state.income.day1 - compA;
+  el.innerHTML = `
+    <div class="payday-card">
+      <div class="day">Día 15 · Falabella${otrosPorDia(15)?' + otros':''}</div>
+      <div class="row"><span>Ingreso</span><b>${formatCOP(state.income.day15)}</b></div>
+      <div class="row"><span>Compromiso estimado</span><b>${formatCOP(compF)}</b></div>
+      <div class="margen ${margen15>=0?'pos':'neg'}">Margen: ${formatCOP(margen15)}</div>
+      <span class="edit-link" onclick="openIncome()">Editar ingresos</span>
+    </div>
+    <div class="payday-card">
+      <div class="day">Día 1 · Addi${otrosPorDia(1)?' + otros':''}</div>
+      <div class="row"><span>Ingreso</span><b>${formatCOP(state.income.day1)}</b></div>
+      <div class="row"><span>Compromiso estimado</span><b>${formatCOP(compA)}</b></div>
+      <div class="margen ${margen1>=0?'pos':'neg'}">Margen: ${formatCOP(margen1)}</div>
+      <span class="edit-link" onclick="openIncome()">Editar ingresos</span>
+    </div>
+  `;
+}
+
+function comprasHTML(cuenta, arr){
+  if(!arr.length) return '<div class="cp"><span class="date">Sin compras activas</span></div>';
+  return arr.map((c,i)=>{
+    const rest = restantes(c);
+    if(rest<=0) return '';
+    return `
+    <div class="cp">
+      <div><div class="desc">${c.desc}</div><div class="date">${formatDate(c.date)} · cuota ${c.cuotasPagadas+1} de ${c.cuotasTotales}</div></div>
+      <div>
+        <div class="amt">${formatCOP(c.cuotaMensual)}/mes</div>
+        <div class="cuotas">quedan ${rest} · pend. ${formatCOP(pendienteCompra(c))}</div>
+        <div class="actions"><span onclick="marcarCuotaPagada('${cuenta}',${i})">cuota pagada</span><span onclick="removeCompra('${cuenta}',${i})">quitar</span></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderGrid(){
+  const grid = document.getElementById('grid');
+  const f = state.falabella;
+  const daysF = daysUntil(f.proximaFecha);
+  const stF = statusFor(daysF);
+  const a = state.addi;
+  const daysA = daysUntil(a.proximaFecha);
+  const stA = statusFor(daysA);
+
+  grid.innerHTML = `
+    <div class="card">
+      <div class="card-head"><h2>Falabella</h2><span class="pill ${stF}">${statusLabel(daysF)}</span></div>
+      <div class="balance">${formatCOP(f.balance)}</div>
+      <div class="balance-label">Saldo utilizado</div>
+      <div class="meta-row"><span>Disponible</span><b>${formatCOP(f.available)}</b></div>
+      <div class="meta-row"><span>Corte</span><b>día ${f.cutDay}</b></div>
+      <div class="meta-row"><span>Próximo pago (estimado por cuotas)</span><b>${formatCOP(falabellaUsado())}</b></div>
+      <div class="meta-row"><span>Fecha</span><b>${formatDate(f.proximaFecha)}</b></div>
+      <div class="btn-row">
+        <button class="primary small" onclick="openCompra('falabella')">+ Compra</button>
+        <button class="ghost small" onclick="openAjustesFalabella()">Ajustes / confirmar con extracto</button>
+      </div>
+      <div class="sub"><div class="sub-title">Compras activas</div><div class="compras">${comprasHTML('falabella', f.compras)}</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Addi</h2><span class="pill ${stA}">${statusLabel(daysA)}</span></div>
+      <div class="balance">${formatCOP(addiTotalPendiente())}</div>
+      <div class="balance-label">Deuda total pendiente</div>
+      <div class="meta-row"><span>Próximo pago (confirmado app)</span><b>${formatCOP(addiUsado())}</b></div>
+      <div class="meta-row"><span>Estimado por cuotas</span><b>${formatCOP(addiEstimado())}</b></div>
+      <div class="meta-row"><span>Fecha</span><b>${formatDate(a.proximaFecha)}</b></div>
+      <div class="btn-row"><button class="ghost small" onclick="openAjustesAddi()">Ajustes / confirmar con app</button></div>
+      <div class="sub">
+        <div class="sub-title">Crédito Grande ${a.grande.esTuyo?'':'· de tu amigo, no cuenta en tus totales'}</div>
+        <div class="meta-row"><span>Pendiente</span><b>${formatCOP(a.grande.pendiente)}</b></div>
+        <div class="meta-row"><span>Cuota fija</span><b>${formatCOP(a.grande.cuotaFija)}/mes</b></div>
+      </div>
+      <div class="sub">
+        <div class="sub-title">Cupo · disponible ${formatCOP(a.cupo.disponible)}</div>
+        <button class="small" style="margin-bottom:8px;" onclick="openCompra('addi')">+ Compra en Cupo</button>
+        <div class="compras">${comprasHTML('addi', a.cupo.compras)}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderOtros(){
+  const el = document.getElementById('otros-list');
+  if(!state.otros.length){ el.innerHTML = '<div class="cp"><span class="date">Sin gastos adicionales registrados</span></div>'; return; }
+  el.innerHTML = state.otros.map((o,i)=>`
+    <div class="cp"><div><div class="desc">${o.desc}</div><div class="date">Día ${o.dia}</div></div>
+    <div><div class="amt">${formatCOP(o.monto)}</div><div class="actions"><span onclick="removeOtro(${i})">quitar</span></div></div></div>
+  `).join('');
+}
+function addOtro(){
+  const desc = document.getElementById('o-desc').value || 'Gasto';
+  const monto = parseFloat(document.getElementById('o-monto').value)||0;
+  const dia = document.getElementById('o-dia').value;
+  if(monto<=0) return;
+  state.otros.push({desc, monto, dia});
+  document.getElementById('o-desc').value=''; document.getElementById('o-monto').value='';
+  render(); saveState();
+}
+function removeOtro(i){ state.otros.splice(i,1); render(); saveState(); }
+
+// ---- modales ----
+function showModal(html){ document.getElementById('modalBody').innerHTML = html; document.getElementById('overlay').classList.remove('hidden'); }
+function closeModal(){ document.getElementById('overlay').classList.add('hidden'); }
+document.getElementById('overlay').addEventListener('click', e=>{ if(e.target.id==='overlay') closeModal(); });
+
+function openIncome(){
+  showModal(`
+    <h3>Ingresos quincenales</h3>
+    <div class="field-m"><label>Pago del día 15</label><input type="number" id="f-inc15" value="${state.income.day15}"></div>
+    <div class="field-m"><label>Pago del día 1</label><input type="number" id="f-inc1" value="${state.income.day1}"></div>
+    <div class="modal-actions"><button class="ghost" onclick="closeModal()">Cancelar</button><button class="primary" onclick="saveIncome()">Guardar</button></div>
+  `);
+}
+function saveIncome(){
+  state.income.day15 = parseFloat(document.getElementById('f-inc15').value)||0;
+  state.income.day1 = parseFloat(document.getElementById('f-inc1').value)||0;
+  closeModal(); render(); saveState();
+}
+
+function openCompra(cuenta){
+  const today = new Date().toISOString().slice(0,10);
+  const label = cuenta==='falabella' ? 'Falabella' : 'Addi · Cupo';
+  showModal(`
+    <h3>Nueva compra · ${label}</h3>
+    <div class="field-m"><label>Descripción</label><input type="text" id="c-desc" placeholder="Ej: Mercado"></div>
+    <div class="field-m"><label>Valor total de la compra</label><input type="number" id="c-valor" placeholder="Ej: 150000"></div>
+    <div class="field-m"><label>Cuotas totales</label><input type="number" id="c-cuotas" value="1" min="1"></div>
+    <div class="field-m"><label>Cuota mensual (déjalo vacío para calcularla)</label><input type="number" id="c-cuotames" placeholder="Ej: 50000"><div class="hint">Si tu extracto o la app ya te muestra el valor exacto de la cuota, ponlo aquí para mayor precisión.</div></div>
+    <div class="field-m"><label>Fecha</label><input type="date" id="c-date" value="${today}"></div>
+    <div class="modal-actions"><button class="ghost" onclick="closeModal()">Cancelar</button><button class="primary" onclick="saveCompra('${cuenta}')">Guardar</button></div>
+  `);
+}
+function saveCompra(cuenta){
+  const valor = parseFloat(document.getElementById('c-valor').value)||0;
+  if(valor<=0){ closeModal(); return; }
+  const desc = document.getElementById('c-desc').value || 'Compra';
+  const cuotasTotales = parseInt(document.getElementById('c-cuotas').value)||1;
+  const cmInput = document.getElementById('c-cuotames').value;
+  const cuotaMensual = cmInput!=='' ? parseFloat(cmInput) : round2(valor/cuotasTotales);
+  const date = document.getElementById('c-date').value;
+  const nueva = { desc, date, valor, cuotasTotales, cuotasPagadas:0, cuotaMensual };
+  if(cuenta==='falabella'){
+    state.falabella.compras.push(nueva);
+    state.falabella.balance += valor;
+    state.falabella.available = Math.max(0, state.falabella.available - valor);
+  } else {
+    state.addi.cupo.compras.push(nueva);
+    state.addi.cupo.disponible = Math.max(0, state.addi.cupo.disponible - valor);
+  }
+  closeModal(); render(); saveState();
+}
+
+function marcarCuotaPagada(cuenta, i){
+  const arr = cuenta==='falabella' ? state.falabella.compras : state.addi.cupo.compras;
+  arr[i].cuotasPagadas++;
+  render(); saveState();
+}
+function removeCompra(cuenta, i){
+  const arr = cuenta==='falabella' ? state.falabella.compras : state.addi.cupo.compras;
+  arr.splice(i,1);
+  render(); saveState();
+}
+
+function openAjustesFalabella(){
+  const f = state.falabella;
+  showModal(`
+    <h3>Ajustes Falabella</h3>
+    <div class="field-m"><label>Saldo utilizado</label><input type="number" id="f-bal" value="${f.balance}"></div>
+    <div class="field-m"><label>Disponible</label><input type="number" id="f-avail" value="${f.available}"></div>
+    <div class="field-m"><label>Intereses + seguro + cuota manejo estimados</label><input type="number" id="f-cargos" value="${f.otrosCargos}"></div>
+    <div class="field-m"><label>Fecha próximo pago</label><input type="date" id="f-fecha" value="${f.proximaFecha}"></div>
+    <div class="field-m"><label>Pago mínimo confirmado (opcional, del extracto)</label><input type="number" id="f-conf" value="${f.confirmado!==null?f.confirmado:''}" placeholder="Déjalo vacío para usar el estimado"><div class="hint">Si lo llenas, este valor manda sobre el estimado por cuotas.</div></div>
+    <div class="modal-actions"><button class="ghost" onclick="closeModal()">Cancelar</button><button class="primary" onclick="saveAjustesFalabella()">Guardar</button></div>
+  `);
+}
+function saveAjustesFalabella(){
+  const f = state.falabella;
+  f.balance = parseFloat(document.getElementById('f-bal').value)||0;
+  f.available = parseFloat(document.getElementById('f-avail').value)||0;
+  f.otrosCargos = parseFloat(document.getElementById('f-cargos').value)||0;
+  f.proximaFecha = document.getElementById('f-fecha').value||'';
+  const conf = document.getElementById('f-conf').value;
+  f.confirmado = conf===''? null : parseFloat(conf);
+  closeModal(); render(); saveState();
+}
+
+function openAjustesAddi(){
+  const a = state.addi;
+  showModal(`
+    <h3>Ajustes Addi</h3>
+    <div class="field-m"><label>Total a pagar confirmado (de la app)</label><input type="number" id="a-conf" value="${a.confirmado!==null?a.confirmado:''}" placeholder="Déjalo vacío para usar el estimado"></div>
+    <div class="field-m"><label>Fecha próximo pago</label><input type="date" id="a-fecha" value="${a.proximaFecha}"></div>
+    <div class="field-m"><label>Pendiente Crédito Grande</label><input type="number" id="a-grande" value="${a.grande.pendiente}"></div>
+    <div class="field-m"><label>Cuota fija Crédito Grande</label><input type="number" id="a-cuotagr" value="${a.grande.cuotaFija}"></div>
+    <div class="field-m"><label>¿El Crédito Grande es tuyo?</label><select id="a-esTuyo"><option value="no" ${!a.grande.esTuyo?'selected':''}>No, es de otra persona</option><option value="si" ${a.grande.esTuyo?'selected':''}>Sí, es mío</option></select></div>
+    <div class="field-m"><label>Cupo disponible</label><input type="number" id="a-cupo" value="${a.cupo.disponible}"></div>
+    <div class="modal-actions"><button class="ghost" onclick="closeModal()">Cancelar</button><button class="primary" onclick="saveAjustesAddi()">Guardar</button></div>
+  `);
+}
+function saveAjustesAddi(){
+  const a = state.addi;
+  const conf = document.getElementById('a-conf').value;
+  a.confirmado = conf===''? null : parseFloat(conf);
+  a.proximaFecha = document.getElementById('a-fecha').value||'';
+  a.grande.pendiente = parseFloat(document.getElementById('a-grande').value)||0;
+  a.grande.cuotaFija = parseFloat(document.getElementById('a-cuotagr').value)||0;
+  a.grande.esTuyo = document.getElementById('a-esTuyo').value==='si';
+  a.cupo.disponible = parseFloat(document.getElementById('a-cupo').value)||0;
+  closeModal(); render(); saveState();
+}
+
+function simular(){
+  const cuenta = document.getElementById('sim-cuenta').value;
+  const monto = parseFloat(document.getElementById('sim-monto').value)||0;
+  const cuotas = parseInt(document.getElementById('sim-cuotas').value)||1;
+  if(monto<=0){ document.getElementById('sim-out').innerHTML=''; return; }
+  const cuotaEst = monto/cuotas;
+  let ingreso, compromiso, dia;
+  if(cuenta==='falabella'){ ingreso=state.income.day15; compromiso=falabellaUsado()+otrosPorDia(15); dia=15; }
+  else { ingreso=state.income.day1; compromiso=addiUsado()+otrosPorDia(1); dia=1; }
+  const margenActual = ingreso - compromiso;
+  const margenNuevo = margenActual - cuotaEst;
+  const cls = margenNuevo>=0 ? 'pos' : 'neg';
+  document.getElementById('sim-out').innerHTML = `
+    <div class="sim-result ${cls}">
+      Cuota estimada: <b>${formatCOP(cuotaEst)}</b>/mes.<br>
+      Tu margen del día ${dia} pasaría de <b>${formatCOP(margenActual)}</b> a <b>${formatCOP(margenNuevo)}</b>.
+      ${margenNuevo<0 ? '<br><b>Te quedarías corto ese mes.</b>' : ''}
+    </div>
+  `;
+}
+
+(async()=>{
+  const { data:{ session } } = await sb.auth.getSession();
+  if(session){ await afterAuth(); }
+  else { document.getElementById('authOverlay').classList.remove('hidden'); }
+})();
+</script>
+</body>
+</html>
