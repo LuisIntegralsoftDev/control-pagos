@@ -132,14 +132,7 @@
 
   <div class="otros-card">
     <h3>Otros pagos o gastos fijos</h3>
-    <div class="otros-add">
-      <div class="field"><label>Descripción</label><input type="text" id="o-desc" placeholder="Ej: Arriendo, servicios"></div>
-      <div class="field"><label>Monto</label><input type="number" id="o-monto" placeholder="Ej: 300000"></div>
-      <div class="field"><label>Se paga con el ingreso del</label><select id="o-dia" onchange="toggleOtroFecha()"><option value="15">Día 15</option><option value="1">Día 1</option></select></div>
-      <div class="field"><label>¿Se repite?</label><select id="o-tipo" onchange="toggleOtroFecha()"><option value="fijo">Fijo cada mes</option><option value="unico">Solo este pago</option></select></div>
-      <div class="field" id="o-fecha-wrap" style="display:none;"><label>¿Para qué fecha?</label><input type="date" id="o-fecha"></div>
-      <button class="primary" onclick="addOtro()">Agregar</button>
-    </div>
+    <button class="primary small" style="margin-bottom:12px;" onclick="openOtroModal()">+ Agregar gasto</button>
     <div class="compras" id="otros-list"></div>
   </div>
 
@@ -403,6 +396,10 @@ function comprasHTML(cuenta, arr){
   }).join('');
 }
 
+let uiOpen = { falabellaCompras:false, addiCompras:false };
+function toggleCompras(which){ uiOpen[which] = !uiOpen[which]; renderGrid(); }
+function contarActivas(arr){ return arr.filter(c=>restantes(c)>0).length; }
+
 function renderGrid(){
   const grid = document.getElementById('grid');
   const f = state.falabella;
@@ -426,7 +423,13 @@ function renderGrid(){
         <button class="ghost small" onclick="openAjustesFalabella()">Ajustes / confirmar con extracto</button>
         <button class="ghost small" onclick="cerrarMesFalabella()" ${puedeCerrar('falabella')?'':'disabled title="Confirma el pago real o espera a la fecha de pago"'}>Cerrar mes</button>
       </div>
-      <div class="sub"><div class="sub-title">Compras activas</div><div class="compras">${comprasHTML('falabella', f.compras)}</div></div>
+      <div class="sub">
+        <div class="sub-title" style="display:flex;justify-content:space-between;align-items:center;">
+          <span>Compras activas (${contarActivas(f.compras)})</span>
+          <span style="cursor:pointer;text-decoration:underline;" onclick="toggleCompras('falabellaCompras')">${uiOpen.falabellaCompras?'ocultar':'ver'}</span>
+        </div>
+        ${uiOpen.falabellaCompras ? `<div class="compras">${comprasHTML('falabella', f.compras)}</div>` : ''}
+      </div>
     </div>
 
     <div class="card">
@@ -446,9 +449,12 @@ function renderGrid(){
         <div class="meta-row"><span>Cuota fija</span><b>${formatCOP(a.grande.cuotaFija)}/mes</b></div>
       </div>
       <div class="sub">
-        <div class="sub-title">Cupo · disponible ${formatCOP(a.cupo.disponible)}</div>
-        <button class="small" style="margin-bottom:8px;" onclick="openCompra('addi')">+ Compra en Cupo</button>
-        <div class="compras">${comprasHTML('addi', a.cupo.compras)}</div>
+        <div class="sub-title" style="display:flex;justify-content:space-between;align-items:center;">
+          <span>Cupo · disponible ${formatCOP(a.cupo.disponible)} · (${contarActivas(a.cupo.compras)} compras)</span>
+          <span style="cursor:pointer;text-decoration:underline;" onclick="toggleCompras('addiCompras')">${uiOpen.addiCompras?'ocultar':'ver'}</span>
+        </div>
+        <button class="small" style="margin:8px 0;" onclick="openCompra('addi')">+ Compra en Cupo</button>
+        ${uiOpen.addiCompras ? `<div class="compras">${comprasHTML('addi', a.cupo.compras)}</div>` : ''}
       </div>
     </div>
   `;
@@ -559,27 +565,37 @@ function renderProyeccion(){
   }
   note.textContent = 'Calculado con las cuotas activas. "Otros no fijos" solo aparece en el pago más próximo de cada cuenta — no se repite hacia adelante.';
 }
-function toggleOtroFecha(){
-  const tipo = document.getElementById('o-tipo').value;
-  const wrap = document.getElementById('o-fecha-wrap');
-  const dia = document.getElementById('o-dia').value;
-  wrap.style.display = tipo==='unico' ? 'flex' : 'none';
-  if(tipo==='unico' && !document.getElementById('o-fecha').value){
-    document.getElementById('o-fecha').value = nextOccurrence(parseInt(dia,10));
+function openOtroModal(){
+  showModal(`
+    <h3>Agregar gasto</h3>
+    <div class="field-m"><label>Descripción</label><input type="text" id="om-desc" placeholder="Ej: Arriendo, servicios"></div>
+    <div class="field-m"><label>Monto</label><input type="number" id="om-monto" placeholder="Ej: 300000"></div>
+    <div class="field-m"><label>Se paga con el ingreso del</label><select id="om-dia" onchange="toggleOtroModalFecha()"><option value="15">Día 15</option><option value="1">Día 1</option></select></div>
+    <div class="field-m"><label>¿Se repite?</label><select id="om-tipo" onchange="toggleOtroModalFecha()"><option value="fijo">Fijo cada mes</option><option value="unico">Solo este pago</option></select></div>
+    <div class="field-m" id="om-fecha-wrap" style="display:none;"><label>¿Para qué fecha?</label><input type="date" id="om-fecha"></div>
+    <div class="modal-actions"><button class="ghost" onclick="closeModal()">Cancelar</button><button class="primary" onclick="saveOtroModal()">Agregar</button></div>
+  `);
+}
+function toggleOtroModalFecha(){
+  const tipo = document.getElementById('om-tipo').value;
+  const dia = document.getElementById('om-dia').value;
+  const wrap = document.getElementById('om-fecha-wrap');
+  wrap.style.display = tipo==='unico' ? 'block' : 'none';
+  if(tipo==='unico' && !document.getElementById('om-fecha').value){
+    document.getElementById('om-fecha').value = nextOccurrence(parseInt(dia,10));
   }
 }
-function addOtro(){
-  const desc = document.getElementById('o-desc').value || 'Gasto';
-  const monto = parseFloat(document.getElementById('o-monto').value)||0;
-  const dia = document.getElementById('o-dia').value;
-  const tipo = document.getElementById('o-tipo').value;
-  const fecha = document.getElementById('o-fecha').value;
-  if(monto<=0) return;
+function saveOtroModal(){
+  const desc = document.getElementById('om-desc').value || 'Gasto';
+  const monto = parseFloat(document.getElementById('om-monto').value)||0;
+  const dia = document.getElementById('om-dia').value;
+  const tipo = document.getElementById('om-tipo').value;
+  const fecha = document.getElementById('om-fecha').value;
+  if(monto<=0){ closeModal(); return; }
   const item = {desc, monto, dia, tipo};
   if(tipo==='unico' && fecha) item.fecha = fecha;
   state.otros.push(item);
-  document.getElementById('o-desc').value=''; document.getElementById('o-monto').value=''; document.getElementById('o-fecha').value='';
-  render(); saveState();
+  closeModal(); render(); saveState();
 }
 function removeOtro(i){ state.otros.splice(i,1); render(); saveState(); }
 
