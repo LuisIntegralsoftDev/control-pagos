@@ -96,6 +96,15 @@
   .field-m .hint{font-size:11px;color:var(--ink-soft);margin-top:3px;}
   .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;}
   .footnote{text-align:center;font-size:12px;color:var(--ink-soft);margin-top:30px;}
+
+  .proj-table{width:100%;border-collapse:collapse;font-size:13px;}
+  .proj-table th{text-align:right;font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);font-weight:500;padding:8px 6px;border-bottom:1px solid var(--line);}
+  .proj-table th:first-child,.proj-table td:first-child{text-align:left;}
+  .proj-table td{text-align:right;font-family:'IBM Plex Mono',monospace;padding:9px 6px;border-bottom:1px solid #EFE9D8;}
+  .proj-table tr:last-child td{border-bottom:none;}
+  .proj-table td.mes{font-family:'Inter',sans-serif;font-weight:500;text-transform:capitalize;}
+  .proj-table td.total{font-weight:600;color:var(--navy);}
+  .proj-note{font-size:11.5px;color:var(--ink-soft);margin-top:10px;}
 </style>
 </head>
 <body>
@@ -136,6 +145,12 @@
     <h3>Historial mensual</h3>
     <p class="totalbar" id="hist-totales" style="margin-bottom:12px;">—</p>
     <div class="compras" id="hist-list" style="max-height:260px;"></div>
+  </div>
+
+  <div class="otros-card">
+    <h3>Proyección de próximos meses</h3>
+    <div id="proj-body"></div>
+    <p class="proj-note">Calculado con las cuotas que ya tienes activas: cuando una compra termina sus cuotas, deja de sumar sola. No incluye compras que aún no has hecho.</p>
   </div>
 
   <div class="sim">
@@ -310,7 +325,7 @@ function addiTotalPendiente(){ return addiCupoUsadoTotal()+(state.addi.grande.es
 function otrosPorDia(dia){ return state.otros.filter(o=>String(o.dia)===String(dia)).reduce((s,o)=>s+o.monto,0); }
 function otrosTotal(){ return state.otros.reduce((s,o)=>s+o.monto,0); }
 
-function render(){ renderTotals(); renderPaydays(); renderGrid(); renderOtros(); renderHistorial(); }
+function render(){ renderTotals(); renderPaydays(); renderGrid(); renderOtros(); renderHistorial(); renderProyeccion(); }
 
 function renderTotals(){
   document.getElementById('tb-deuda').textContent = formatCOP(falabellaPendienteTotal()+addiTotalPendiente());
@@ -430,6 +445,36 @@ function renderHistorial(){
   `).join('');
 }
 function removeHistorial(i){ state.historial.splice(i,1); render(); saveState(); }
+
+function proyeccion(nMeses){
+  const grandeMeses = (state.addi.grande.esTuyo && state.addi.grande.cuotaFija>0)
+    ? Math.ceil(state.addi.grande.pendiente / state.addi.grande.cuotaFija) : 0;
+  const baseFecha = state.addi.proximaFecha || state.falabella.proximaFecha || new Date().toISOString().slice(0,10);
+  const rows = [];
+  for(let k=0;k<nMeses;k++){
+    const sumF = state.falabella.compras.reduce((s,c)=> s + (restantes(c)>k ? c.cuotaMensual : 0), 0);
+    const totalF = sumF + (sumF>0 ? (state.falabella.otrosCargos||0) : 0) + otrosPorDia(15);
+
+    const sumACupo = state.addi.cupo.compras.reduce((s,c)=> s + (restantes(c)>k ? c.cuotaMensual : 0), 0);
+    const sumAGrande = k<grandeMeses ? state.addi.grande.cuotaFija : 0;
+    const totalA = sumACupo + sumAGrande + otrosPorDia(1);
+
+    rows.push({ label: mesLabel(addMonths(baseFecha, k)), falabella: totalF, addi: totalA, total: totalF+totalA });
+  }
+  return rows;
+}
+function renderProyeccion(){
+  const rows = proyeccion(6);
+  const el = document.getElementById('proj-body');
+  el.innerHTML = `
+    <table class="proj-table">
+      <thead><tr><th>Mes</th><th>Falabella</th><th>Addi</th><th>Total</th></tr></thead>
+      <tbody>
+        ${rows.map(r=>`<tr><td class="mes">${r.label}</td><td>${formatCOP(r.falabella)}</td><td>${formatCOP(r.addi)}</td><td class="total">${formatCOP(r.total)}</td></tr>`).join('')}
+      </tbody>
+    </table>
+  `;
+}
 function addOtro(){
   const desc = document.getElementById('o-desc').value || 'Gasto';
   const monto = parseFloat(document.getElementById('o-monto').value)||0;
