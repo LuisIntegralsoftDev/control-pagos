@@ -634,27 +634,50 @@ function renderGrid(){
   `;
 }
 
-function renderOtros(){
-  const el = document.getElementById('otros-list');
-  if(!state.otros.length){ el.innerHTML = '<p style="font-size:14px;color:var(--ink-soft);">Sin gastos adicionales registrados.</p>'; return; }
-  el.innerHTML = state.otros.map((o,i)=>{
-    const tipo = o.tipo||'fijo';
-    let meta, extraActions = '';
-    if(tipo==='fijo'){
-      meta = `Día ${o.dia} · fijo cada mes`;
-    } else if(tipo==='unico'){
-      meta = `Día ${o.dia} · solo el ${formatDate(getTargetFecha(o))}`;
-    } else {
-      meta = `Día ${o.dia} · cuota ${o.cuotasPagadas+1} de ${o.cuotasTotales} · desde el ${formatDate(o.fecha)}`;
-      extraActions = `<span onclick="marcarCuotaOtroPagada(${i})">cuota pagada</span>`;
-    }
-    return `
+function proximaFechaOtro(o){
+  const tipo = o.tipo||'fijo';
+  if(tipo==='unico') return getTargetFecha(o);
+  return nextOccurrence(parseInt(o.dia,10));
+}
+function otroItemHTML(o, i){
+  const tipo = o.tipo||'fijo';
+  let meta, extraActions = '';
+  if(tipo==='fijo'){
+    meta = `Día ${o.dia} · fijo cada mes`;
+  } else if(tipo==='unico'){
+    meta = `Día ${o.dia} · solo el ${formatDate(getTargetFecha(o))}`;
+  } else {
+    meta = `Día ${o.dia} · cuota ${o.cuotasPagadas+1} de ${o.cuotasTotales} · desde el ${formatDate(o.fecha)}`;
+    extraActions = `<span onclick="marcarCuotaOtroPagada(${i})">cuota pagada</span>`;
+  }
+  return `
     <div class="otro-item">
       <div class="oi-head"><span class="oi-desc">${o.desc}</span><span class="oi-amt">${formatCOP(o.monto)}</span></div>
       <div class="oi-meta">${meta}</div>
       <div class="oi-actions">${extraActions}<span onclick="removeOtro(${i})">quitar</span></div>
     </div>`;
-  }).join('');
+}
+function renderOtros(){
+  const el = document.getElementById('otros-list');
+  if(!state.otros.length){ el.innerHTML = '<p style="font-size:14px;color:var(--ink-soft);">Sin gastos adicionales registrados.</p>'; return; }
+
+  const conIndice = state.otros.map((o,i)=>({o,i}));
+  const porTipo = (tipo)=> conIndice
+    .filter(x=>(x.o.tipo||'fijo')===tipo)
+    .sort((a,b)=> proximaFechaOtro(a.o).localeCompare(proximaFechaOtro(b.o)));
+
+  const grupos = [
+    { titulo:'Fijos cada mes', items: porTipo('fijo') },
+    { titulo:'A cuotas', items: porTipo('cuotas') },
+    { titulo:'Solo una vez', items: porTipo('unico') }
+  ];
+
+  el.innerHTML = grupos
+    .filter(g=>g.items.length)
+    .map(g=>`
+      <div class="sub-title" style="margin:14px 0 8px;">${g.titulo}</div>
+      ${g.items.map(x=>otroItemHTML(x.o, x.i)).join('')}
+    `).join('');
 }
 function renderHistorial(){
   const totalesEl = document.getElementById('hist-totales');
@@ -910,7 +933,7 @@ function openOtroModal(){
     <div class="field-m"><label>¿Se repite?</label><select id="om-tipo" onchange="toggleOtroModalFecha()">
       <option value="unico">Solo esta vez</option>
       <option value="fijo">Fijo cada mes</option>
-      <option value="cuotas">A cuotas (con alguien más, no Falabella/Addi)</option>
+      <option value="cuotas">A cuotas</option>
     </select></div>
     <div class="field-m" id="om-monto-wrap"><label id="om-monto-label">Monto</label><input type="number" id="om-monto" placeholder="Ej: 50000"></div>
     <div class="field-m" id="om-fecha-wrap"><label>¿Qué día fue (o va a ser) el gasto?</label><input type="date" id="om-fecha"><div class="hint">El sistema calcula solo si sale del ingreso del 1 o del 15.</div></div>
