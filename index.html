@@ -1021,9 +1021,11 @@ function saveOtroModal(){
     if(ahorroId){
       const ahorro = state.ahorros.find(a=>a.id===ahorroId);
       if(ahorro){
+        const movId = 'mv_'+Date.now()+Math.floor(Math.random()*1000);
         ahorro.saldo += monto;
-        ahorro.movimientos.unshift({fecha, tipo:'deposito', monto});
+        ahorro.movimientos.unshift({fecha, tipo:'deposito', monto, movId});
         item.origenAhorro = ahorroId;
+        item.movId = movId;
         item.desc = `Ahorro: ${ahorro.nombre}`;
       }
     }
@@ -1038,7 +1040,20 @@ function saveOtroModal(){
   state.otros.push(item);
   closeModal(); render(); saveState();
 }
-function removeOtro(i){ state.otros.splice(i,1); render(); saveState(); }
+function removeOtro(i){
+  const o = state.otros[i];
+  if(o && o.origenAhorro){
+    const ahorro = state.ahorros.find(a=>a.id===o.origenAhorro);
+    if(ahorro){
+      ahorro.saldo = Math.max(0, ahorro.saldo - o.monto);
+      const idx = o.movId
+        ? ahorro.movimientos.findIndex(m=>m.movId===o.movId)
+        : ahorro.movimientos.findIndex(m=>m.tipo==='deposito' && m.fecha===o.fecha && m.monto===o.monto);
+      if(idx>=0) ahorro.movimientos.splice(idx,1);
+    }
+  }
+  state.otros.splice(i,1); render(); saveState();
+}
 
 // ---- Ahorros ----
 async function sha256Hex(text){
@@ -1095,9 +1110,10 @@ function saveDeposito(id){
   const monto = parseFloat(document.getElementById('dep-monto').value)||0;
   const fecha = document.getElementById('dep-fecha').value || new Date().toISOString().slice(0,10);
   if(monto<=0){ closeModal(); return; }
+  const movId = 'mv_'+Date.now()+Math.floor(Math.random()*1000);
   ahorro.saldo += monto;
-  ahorro.movimientos.unshift({fecha, tipo:'deposito', monto});
-  state.otros.push({ desc:`Ahorro: ${ahorro.nombre}`, monto, tipo:'unico', dia: diaFromFecha(fecha), fecha, origenAhorro:id });
+  ahorro.movimientos.unshift({fecha, tipo:'deposito', monto, movId});
+  state.otros.push({ desc:`Ahorro: ${ahorro.nombre}`, monto, tipo:'unico', dia: diaFromFecha(fecha), fecha, origenAhorro:id, movId });
   closeModal(); render(); saveState();
 }
 
