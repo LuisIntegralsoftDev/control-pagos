@@ -162,18 +162,14 @@
   <button data-view="otros" onclick="navTo('otros')">Otros</button>
   <button data-view="historial" onclick="navTo('historial')">Historial</button>
   <button data-view="proyeccion" onclick="navTo('proyeccion')">Proyección</button>
-  <span class="drawer-close" onclick="toggleDrawer()">✕ Cerrar menú</span>
+  <button onclick="logout()" style="margin-top:auto;color:#C9705A;">Cerrar sesión</button>
 </nav>
 
 <div class="wrap">
-  <header style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
-    <div>
-      <p class="eyebrow">Falabella · Addi · otros</p>
-      <h1>Control de pagos</h1>
-    </div>
+  <header style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+    <h1 style="margin:0;">Control de pagos</h1>
     <button class="menu-btn" onclick="toggleDrawer()" aria-label="Abrir menú">☰</button>
   </header>
-  <p class="totalbar">Deuda total: <b id="tb-deuda">—</b> · Compromiso este mes: <b id="tb-mes">—</b> · <span class="edit-link" style="color:var(--ink-soft);" onclick="logout()">Cerrar sesión</span></p>
 
   <section class="view" id="view-resumen">
     <div class="debt-hero" id="debt-hero"></div>
@@ -436,7 +432,7 @@ function otrosNoFijoEnMes(dia, ymStr){
 }
 function otrosTotal(){ return state.otros.reduce((s,o)=>s+o.monto,0); }
 
-function render(){ renderDebtHero(); renderTotals(); renderPaydays(); renderGrid(); renderOtros(); renderHistorial(); renderDeudaChart(); renderProyeccion(); }
+function render(){ renderDebtHero(); renderPaydays(); renderGrid(); renderOtros(); renderHistorial(); renderDeudaChart(); renderProyeccion(); }
 
 function renderDebtHero(){
   const f = falabellaPendienteTotal();
@@ -446,16 +442,11 @@ function renderDebtHero(){
   el.innerHTML = `
     <div class="label">Debes en total</div>
     <div class="amount">${formatCOP(total)}</div>
-    <div class="sub">Antes de comprar algo nuevo — esto es lo que ya tienes que pagar</div>
     <div class="split">
       <div>Falabella<b>${formatCOP(f)}</b></div>
-      <div>Addi (sin el Crédito Grande de tu amigo)<b>${formatCOP(a)}</b></div>
+      <div>Addi<b>${formatCOP(a)}</b></div>
     </div>
   `;
-}
-function renderTotals(){
-  document.getElementById('tb-deuda').textContent = formatCOP(falabellaPendienteTotal()+addiTotalPendiente());
-  document.getElementById('tb-mes').textContent = formatCOP(falabellaUsado()+addiUsado()+otrosTotal());
 }
 
 function proximoFalabella(){
