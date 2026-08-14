@@ -97,6 +97,14 @@
   .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;}
   .footnote{text-align:center;font-size:12px;color:var(--ink-soft);margin-top:30px;}
 
+  .debt-hero{background:linear-gradient(135deg,#A24132 0%,#7A2E22 100%);color:#FBF1EC;border-radius:14px;padding:28px 24px;margin-bottom:22px;text-align:center;}
+  .debt-hero .label{font-family:'IBM Plex Mono',monospace;font-size:12px;text-transform:uppercase;letter-spacing:.1em;opacity:.85;}
+  .debt-hero .amount{font-family:'Fraunces',serif;font-weight:700;font-size:44px;margin:8px 0 4px;line-height:1.1;}
+  .debt-hero .sub{font-size:13px;opacity:.92;margin-top:6px;}
+  .debt-hero .split{display:flex;justify-content:center;gap:28px;margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,.25);flex-wrap:wrap;}
+  .debt-hero .split div{font-size:12px;opacity:.85;}
+  .debt-hero .split b{display:block;font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600;opacity:1;margin-top:2px;}
+
   .proj-table{width:100%;border-collapse:collapse;font-size:13px;}
   .proj-table th{text-align:right;font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);font-weight:500;padding:8px 6px;border-bottom:1px solid var(--line);}
   .proj-table th:first-child,.proj-table td:first-child{text-align:left;}
@@ -126,6 +134,8 @@
     <h1>Control de pagos</h1>
     <p class="totalbar">Deuda total: <b id="tb-deuda">—</b> · Compromiso este mes (Falabella + Addi + otros): <b id="tb-mes">—</b> · <span class="edit-link" style="color:var(--ink-soft);" onclick="logout()">Cerrar sesión</span></p>
   </header>
+
+  <div class="debt-hero" id="debt-hero"></div>
 
   <div class="paydays" id="paydays"></div>
   <div class="grid" id="grid"></div>
@@ -344,8 +354,23 @@ function otrosNoFijoEnMes(dia, ymStr){
 }
 function otrosTotal(){ return state.otros.reduce((s,o)=>s+o.monto,0); }
 
-function render(){ renderTotals(); renderPaydays(); renderGrid(); renderOtros(); renderHistorial(); renderProyeccion(); }
+function render(){ renderDebtHero(); renderTotals(); renderPaydays(); renderGrid(); renderOtros(); renderHistorial(); renderProyeccion(); }
 
+function renderDebtHero(){
+  const f = falabellaPendienteTotal();
+  const a = addiTotalPendiente();
+  const total = f + a;
+  const el = document.getElementById('debt-hero');
+  el.innerHTML = `
+    <div class="label">Debes en total</div>
+    <div class="amount">${formatCOP(total)}</div>
+    <div class="sub">Antes de comprar algo nuevo — esto es lo que ya tienes que pagar</div>
+    <div class="split">
+      <div>Falabella<b>${formatCOP(f)}</b></div>
+      <div>Addi (sin el Crédito Grande de tu amigo)<b>${formatCOP(a)}</b></div>
+    </div>
+  `;
+}
 function renderTotals(){
   document.getElementById('tb-deuda').textContent = formatCOP(falabellaPendienteTotal()+addiTotalPendiente());
   document.getElementById('tb-mes').textContent = formatCOP(falabellaUsado()+addiUsado()+otrosTotal());
