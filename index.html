@@ -49,6 +49,8 @@
   .paydays{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px;}
   @media(max-width:620px){.paydays{grid-template-columns:1fr;}}
   .payday-card{background:var(--navy);color:#F6F2E9;border-radius:10px;padding:16px 18px;}
+  .payday-card .pd-btn{display:block;width:100%;margin-top:12px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.3);color:#FBF1EC;border-radius:8px;padding:9px 10px;font-family:'Inter',sans-serif;font-size:12.5px;font-weight:500;cursor:pointer;}
+  .payday-card .pd-btn:hover{background:rgba(255,255,255,.16);}
   .payday-card .day{font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.06em;opacity:.65;}
   .payday-card .row{display:flex;justify-content:space-between;margin-top:7px;font-size:13px;}
   .payday-card .row b{font-family:'IBM Plex Mono',monospace;}
@@ -187,6 +189,7 @@
   <section class="view" id="view-resumen">
     <div class="debt-hero" id="debt-hero"></div>
     <div class="paydays" id="paydays"></div>
+    <p style="text-align:center;margin:0 0 18px;"><span class="edit-link" onclick="openIncome()">Editar ingresos</span></p>
 
     <button class="btn-gastos" onclick="showView('otros')">+ Otros pagos o gastos fijos</button>
 
@@ -511,7 +514,7 @@ function renderPaydays(){
       <div class="row"><span>Falabella</span><b>${formatCOP(pf.monto)}</b></div>
       ${otros15?`<div class="row"><span>Otros</span><b>${formatCOP(otros15)}</b></div>`:''}
       <div class="margen ${margen15>=0?'pos':'neg'}">Margen: ${formatCOP(margen15)}</div>
-      <div style="margin-top:10px;"><span class="edit-link" onclick="verDetallePayday('falabella')">Ver detalles</span> · <span class="edit-link" onclick="openIncome()">Editar ingresos</span></div>
+      <button class="pd-btn" onclick="verDetallePayday('falabella')">Ver detalles</button>
     </div>
     <div class="payday-card">
       <div class="day">${formatDate(pa.fecha)} (día 1) · Addi${otros1?' + otros':''}</div>
@@ -519,7 +522,7 @@ function renderPaydays(){
       <div class="row"><span>Addi</span><b>${formatCOP(pa.monto)}</b></div>
       ${otros1?`<div class="row"><span>Otros</span><b>${formatCOP(otros1)}</b></div>`:''}
       <div class="margen ${margen1>=0?'pos':'neg'}">Margen: ${formatCOP(margen1)}</div>
-      <div style="margin-top:10px;"><span class="edit-link" onclick="verDetallePayday('addi')">Ver detalles</span> · <span class="edit-link" onclick="openIncome()">Editar ingresos</span></div>
+      <button class="pd-btn" onclick="verDetallePayday('addi')">Ver detalles</button>
     </div>
   `;
 }
