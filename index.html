@@ -140,6 +140,11 @@
   .field-m input,.field-m select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:7px;font-family:'Inter',sans-serif;font-size:14px;background:#fff;color:var(--ink);}
   .field-m .hint{font-size:11px;color:var(--ink-soft);margin-top:3px;}
   .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;}
+  .alert-box{border-left:4px solid var(--navy);background:#EEF1F6;border-radius:8px;padding:14px 16px;margin-bottom:4px;}
+  .alert-box .alert-msg{font-size:14px;color:var(--ink);line-height:1.5;}
+  .alert-box.warning{border-color:var(--gold);background:var(--gold-bg);}
+  .alert-box.error{border-color:var(--red);background:var(--red-bg);}
+  .alert-box.success{border-color:var(--sage);background:var(--sage-bg);}
   .footnote{text-align:center;font-size:12px;color:var(--ink-soft);margin-top:30px;}
 
   .debt-hero{background:linear-gradient(135deg,#A24132 0%,#7A2E22 100%);color:#FBF1EC;border-radius:14px;padding:28px 24px;margin-bottom:22px;text-align:center;}
@@ -410,36 +415,40 @@ function puedeCerrar(cuenta){
 
 function cerrarMesFalabella(){
   if(!puedeCerrar('falabella')){
-    alert(`Todavía faltan ${daysUntil(state.falabella.proximaFecha)} día(s) para el ${formatDate(state.falabella.proximaFecha)} y no has confirmado el pago real. Actualízalo en "Ajustes / confirmar con extracto" o espera a la fecha de pago.`);
+    customAlert(`Todavía faltan ${daysUntil(state.falabella.proximaFecha)} día(s) para el ${formatDate(state.falabella.proximaFecha)} y no has confirmado el pago real. Actualízalo en "Ajustes / confirmar con extracto" o espera a la fecha de pago.`, 'warning');
     return;
   }
-  if(!confirm(`¿Ya pagaste ${formatCOP(falabellaUsado())} de Falabella? Esto archiva el mes y avanza las cuotas.`)) return;
-  const monto = falabellaUsado();
-  const hoy = new Date().toISOString().slice(0,10);
-  state.historial.unshift({ cuenta:'falabella', fecha:hoy, monto });
-  state.falabella.compras.forEach(c=>{ if(restantes(c)>0) c.cuotasPagadas++; });
-  state.falabella.compras = state.falabella.compras.filter(c=>restantes(c)>0);
-  state.falabella.confirmado = null;
-  state.falabella.proximaFecha = addMonths(state.falabella.proximaFecha, 1);
-  registrarSnapshotDeuda(hoy);
-  render(); saveState();
+  customConfirm(`¿Ya pagaste ${formatCOP(falabellaUsado())} de Falabella? Esto archiva el mes y avanza las cuotas.`, 'warning', (ok)=>{
+    if(!ok) return;
+    const monto = falabellaUsado();
+    const hoy = new Date().toISOString().slice(0,10);
+    state.historial.unshift({ cuenta:'falabella', fecha:hoy, monto });
+    state.falabella.compras.forEach(c=>{ if(restantes(c)>0) c.cuotasPagadas++; });
+    state.falabella.compras = state.falabella.compras.filter(c=>restantes(c)>0);
+    state.falabella.confirmado = null;
+    state.falabella.proximaFecha = addMonths(state.falabella.proximaFecha, 1);
+    registrarSnapshotDeuda(hoy);
+    render(); saveState();
+  });
 }
 function cerrarMesAddi(){
   if(!puedeCerrar('addi')){
-    alert(`Todavía faltan ${daysUntil(state.addi.proximaFecha)} día(s) para el ${formatDate(state.addi.proximaFecha)} y no has confirmado el pago real. Actualízalo en "Ajustes / confirmar con app" o espera a la fecha de pago.`);
+    customAlert(`Todavía faltan ${daysUntil(state.addi.proximaFecha)} día(s) para el ${formatDate(state.addi.proximaFecha)} y no has confirmado el pago real. Actualízalo en "Ajustes / confirmar con app" o espera a la fecha de pago.`, 'warning');
     return;
   }
-  if(!confirm(`¿Ya pagaste ${formatCOP(addiUsado())} de Addi? Esto archiva el mes y avanza las cuotas.`)) return;
-  const monto = addiUsado();
-  const hoy = new Date().toISOString().slice(0,10);
-  state.historial.unshift({ cuenta:'addi', fecha:hoy, monto });
-  state.addi.cupo.compras.forEach(c=>{ if(restantes(c)>0) c.cuotasPagadas++; });
-  state.addi.cupo.compras = state.addi.cupo.compras.filter(c=>restantes(c)>0);
-  if(state.addi.grande.esTuyo){ state.addi.grande.pendiente = Math.max(0, state.addi.grande.pendiente - state.addi.grande.cuotaFija); }
-  state.addi.confirmado = null;
-  state.addi.proximaFecha = addMonths(state.addi.proximaFecha, 1);
-  registrarSnapshotDeuda(hoy);
-  render(); saveState();
+  customConfirm(`¿Ya pagaste ${formatCOP(addiUsado())} de Addi? Esto archiva el mes y avanza las cuotas.`, 'warning', (ok)=>{
+    if(!ok) return;
+    const monto = addiUsado();
+    const hoy = new Date().toISOString().slice(0,10);
+    state.historial.unshift({ cuenta:'addi', fecha:hoy, monto });
+    state.addi.cupo.compras.forEach(c=>{ if(restantes(c)>0) c.cuotasPagadas++; });
+    state.addi.cupo.compras = state.addi.cupo.compras.filter(c=>restantes(c)>0);
+    if(state.addi.grande.esTuyo){ state.addi.grande.pendiente = Math.max(0, state.addi.grande.pendiente - state.addi.grande.cuotaFija); }
+    state.addi.confirmado = null;
+    state.addi.proximaFecha = addMonths(state.addi.proximaFecha, 1);
+    registrarSnapshotDeuda(hoy);
+    render(); saveState();
+  });
 }
 function registrarSnapshotDeuda(fecha){
   const total = falabellaPendienteTotal() + addiTotalPendiente();
@@ -456,26 +465,39 @@ function estadoQuincena(fecha){
   return state.quincenasCerradas.find(q=>q.fecha===fecha);
 }
 function cerrarQuincena(fecha){
-  if(!confirm(`¿Cerrar la quincena del ${formatDate(fecha)}? Los gastos "solo esta vez" de esa fecha quedarán bloqueados y no se podrán quitar ni agregar más ahí.`)) return;
-  let q = estadoQuincena(fecha);
-  if(!q){ q = {fecha, cerrada:true, reaberturas:0}; state.quincenasCerradas.push(q); }
-  else { q.cerrada = true; }
-  render(); saveState();
+  const dias = daysUntil(fecha);
+  if(dias===null || dias>0){
+    customAlert(`Todavía faltan ${dias} día(s) para el ${formatDate(fecha)}. Espera a que llegue la fecha de pago para poder cerrar la quincena.`, 'warning');
+    return;
+  }
+  customConfirm(`¿Cerrar la quincena del ${formatDate(fecha)}? Los gastos "solo esta vez" de esa fecha quedarán bloqueados y no se podrán quitar ni agregar más ahí.`, 'warning', (ok)=>{
+    if(!ok) return;
+    let q = estadoQuincena(fecha);
+    if(!q){ q = {fecha, cerrada:true, reaberturas:0}; state.quincenasCerradas.push(q); }
+    else { q.cerrada = true; }
+    render(); saveState();
+  });
 }
 function reabrirQuincena(fecha){
   const q = estadoQuincena(fecha);
   if(!q) return;
-  if(q.reaberturas>=1){ alert('Esta quincena ya se reabrió una vez — no se puede volver a reabrir.'); return; }
-  if(!confirm(`¿Reabrir la quincena del ${formatDate(fecha)}? Solo puedes hacerlo una vez.`)) return;
-  q.cerrada = false;
-  q.reaberturas++;
-  render(); saveState();
+  if(q.reaberturas>=1){ customAlert('Esta quincena ya se reabrió una vez — no se puede volver a reabrir.', 'error'); return; }
+  customConfirm(`¿Reabrir la quincena del ${formatDate(fecha)}? Solo puedes hacerlo una vez.`, 'warning', (ok)=>{
+    if(!ok) return;
+    q.cerrada = false;
+    q.reaberturas++;
+    render(); saveState();
+  });
 }
 function quincenaBoton(fecha){
   const q = estadoQuincena(fecha);
-  if(!q || !q.cerrada) return { label:'Cerrar quincena', onclick:`cerrarQuincena('${fecha}')`, disabled:false };
-  if(q.reaberturas<1) return { label:'Reabrir quincena', onclick:`reabrirQuincena('${fecha}')`, disabled:false };
-  return { label:'Quincena cerrada', onclick:'', disabled:true };
+  if(!q || !q.cerrada){
+    const dias = daysUntil(fecha);
+    const puede = dias!==null && dias<=0;
+    return { label:'Cerrar quincena', onclick:`cerrarQuincena('${fecha}')`, disabled: !puede, title: puede ? '' : 'Se habilita el día del pago' };
+  }
+  if(q.reaberturas<1) return { label:'Reabrir quincena', onclick:`reabrirQuincena('${fecha}')`, disabled:false, title:'' };
+  return { label:'Quincena cerrada', onclick:'', disabled:true, title:'' };
 }
 
 function falabellaEstimado(){
@@ -578,7 +600,7 @@ function renderPaydays(){
       ${otros15?`<div class="row"><span>Otros</span><b>${formatCOP(otros15)}</b></div>`:''}
       <div class="margen ${margen15>=0?'pos':'neg'}">Margen: ${formatCOP(margen15)}</div>
       <button class="pd-btn" onclick="verDetallePayday('falabella')">Ver detalles</button>
-      <button class="pd-btn" ${bF.disabled?'disabled':''} onclick="${bF.onclick}">${bF.label}</button>
+      <button class="pd-btn" ${bF.disabled?'disabled':''} ${bF.title?`title="${bF.title}"`:''} onclick="${bF.onclick}">${bF.label}</button>
       <button class="pd-btn" onclick="cerrarMesFalabella()" ${(!puedeCerrar('falabella')||pf.monto===0)?'disabled':''}>Cerrar mes Falabella</button>
     </div>
     <div class="payday-card">
@@ -589,7 +611,7 @@ function renderPaydays(){
       ${otros1?`<div class="row"><span>Otros</span><b>${formatCOP(otros1)}</b></div>`:''}
       <div class="margen ${margen1>=0?'pos':'neg'}">Margen: ${formatCOP(margen1)}</div>
       <button class="pd-btn" onclick="verDetallePayday('addi')">Ver detalles</button>
-      <button class="pd-btn" ${bA.disabled?'disabled':''} onclick="${bA.onclick}">${bA.label}</button>
+      <button class="pd-btn" ${bA.disabled?'disabled':''} ${bA.title?`title="${bA.title}"`:''} onclick="${bA.onclick}">${bA.label}</button>
       <button class="pd-btn" onclick="cerrarMesAddi()" ${(!puedeCerrar('addi')||pa.monto===0)?'disabled':''}>Cerrar mes Addi</button>
     </div>
   `;
@@ -1063,7 +1085,7 @@ function saveOtroModal(){
     const qFecha = quincenaCanonica(fecha, dia);
     const q = estadoQuincena(qFecha);
     if(q && q.cerrada){
-      alert(`La quincena del ${formatDate(qFecha)} ya está cerrada. No puedes agregar gastos ahí.`);
+      customAlert(`La quincena del ${formatDate(qFecha)} ya está cerrada. No puedes agregar gastos ahí.`, 'error');
       closeModal(); return;
     }
     const ahorroId = document.getElementById('om-ahorro').value;
@@ -1096,7 +1118,7 @@ function removeOtro(i){
     const qFecha = quincenaCanonica(o.fecha, o.dia);
     const q = estadoQuincena(qFecha);
     if(q && q.cerrada){
-      alert(`La quincena del ${formatDate(qFecha)} ya está cerrada. No puedes quitar este gasto.`);
+      customAlert(`La quincena del ${formatDate(qFecha)} ya está cerrada. No puedes quitar este gasto.`, 'error');
       return;
     }
   }
@@ -1147,9 +1169,11 @@ function marcarDestacado(id){
   render(); saveState();
 }
 function eliminarAhorro(id){
-  if(!confirm('¿Quitar este ahorro? Se pierde todo su historial.')) return;
-  state.ahorros = state.ahorros.filter(a=>a.id!==id);
-  render(); saveState();
+  customConfirm('¿Quitar este ahorro? Se pierde todo su historial.', 'error', (ok)=>{
+    if(!ok) return;
+    state.ahorros = state.ahorros.filter(a=>a.id!==id);
+    render(); saveState();
+  });
 }
 
 function openDepositoModal(id){
@@ -1172,7 +1196,7 @@ function saveDeposito(id){
   const qFecha = quincenaCanonica(fecha, dia);
   const q = estadoQuincena(qFecha);
   if(q && q.cerrada){
-    alert(`La quincena del ${formatDate(qFecha)} ya está cerrada. No puedes agregar depósitos ahí.`);
+    customAlert(`La quincena del ${formatDate(qFecha)} ya está cerrada. No puedes agregar depósitos ahí.`, 'error');
     closeModal(); return;
   }
   const movId = 'mv_'+Date.now()+Math.floor(Math.random()*1000);
@@ -1286,6 +1310,32 @@ function marcarCuotaOtroPagada(i){
 // ---- modales ----
 function showModal(html){ document.getElementById('modalBody').innerHTML = html; document.getElementById('overlay').classList.remove('hidden'); }
 function closeModal(){ document.getElementById('overlay').classList.add('hidden'); }
+
+function customAlert(message, type){
+  type = type || 'info';
+  showModal(`
+    <div class="alert-box ${type}"><div class="alert-msg">${message}</div></div>
+    <div class="modal-actions"><button class="primary" onclick="closeModal()">Entendido</button></div>
+  `);
+}
+let _confirmCallback = null;
+function customConfirm(message, type, onConfirm){
+  type = type || 'warning';
+  _confirmCallback = onConfirm;
+  showModal(`
+    <div class="alert-box ${type}"><div class="alert-msg">${message}</div></div>
+    <div class="modal-actions">
+      <button class="ghost" onclick="_resolveConfirm(false)">Cancelar</button>
+      <button class="primary" onclick="_resolveConfirm(true)">Confirmar</button>
+    </div>
+  `);
+}
+function _resolveConfirm(result){
+  const cb = _confirmCallback;
+  _confirmCallback = null;
+  closeModal();
+  if(cb) cb(result);
+}
 document.getElementById('overlay').addEventListener('click', e=>{ if(e.target.id==='overlay') closeModal(); });
 
 function openIncome(){
