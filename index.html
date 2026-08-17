@@ -548,7 +548,9 @@ function renderDebtHero(){
 }
 
 function proximoFalabella(){
-  const fecha = nextOccurrence(15);
+  const calFecha = nextOccurrence(15);
+  const propFecha = state.falabella.proximaFecha || calFecha;
+  const fecha = (propFecha < calFecha) ? propFecha : calFecha;
   const k = state.falabella.proximaFecha ? monthsBetween(state.falabella.proximaFecha, fecha) : 0;
   const sum = k<0 ? 0 : state.falabella.compras.reduce((s,c)=> s + (restantes(c)>k ? c.cuotaMensual : 0), 0);
   const cargos = sum>0 ? (state.falabella.otrosCargos||0) : 0;
@@ -557,7 +559,9 @@ function proximoFalabella(){
   return { fecha, monto: sum+cargos, items };
 }
 function proximoAddi(){
-  const fecha = nextOccurrence(1);
+  const calFecha = nextOccurrence(1);
+  const propFecha = state.addi.proximaFecha || calFecha;
+  const fecha = (propFecha < calFecha) ? propFecha : calFecha;
   const grandeMeses = (state.addi.grande.esTuyo && state.addi.grande.cuotaFija>0)
     ? Math.ceil(state.addi.grande.pendiente / state.addi.grande.cuotaFija) : 0;
   const k = state.addi.proximaFecha ? monthsBetween(state.addi.proximaFecha, fecha) : 0;
@@ -590,15 +594,18 @@ function renderPaydays(){
 
   const bF = quincenaBoton(pf.fecha);
   const bA = quincenaBoton(pa.fecha);
+  const vencidaF = daysUntil(pf.fecha) < 0;
+  const vencidaA = daysUntil(pa.fecha) < 0;
 
   el.innerHTML = `
     <div class="payday-card">
       <div class="pd-date">${formatDate(pf.fecha)}</div>
       <div class="pd-label">Falabella${otros15?' + otros':''}</div>
       <div class="row"><span>Ingreso</span><b>${formatCOP(state.income.day15)}</b></div>
-      <div class="row"><span>Falabella</span><b>${formatCOP(pf.monto)}</b></div>
+      ${pf.monto?`<div class="row"><span>Falabella</span><b>${formatCOP(pf.monto)}</b></div>`:''}
       ${otros15?`<div class="row"><span>Otros</span><b>${formatCOP(otros15)}</b></div>`:''}
       <div class="margen ${margen15>=0?'pos':'neg'}">Margen: ${formatCOP(margen15)}</div>
+      ${vencidaF?'<div class="alert-box warning" style="margin-top:10px;padding:8px 10px;"><div class="alert-msg" style="font-size:12px;">Ya pasó esta fecha y el mes no se ha cerrado.</div></div>':''}
       <button class="pd-btn" onclick="verDetallePayday('falabella')">Ver detalles</button>
       <button class="pd-btn" ${bF.disabled?'disabled':''} ${bF.title?`title="${bF.title}"`:''} onclick="${bF.onclick}">${bF.label}</button>
       <button class="pd-btn" onclick="cerrarMesFalabella()" ${(!puedeCerrar('falabella')||pf.monto===0)?'disabled':''}>Cerrar mes Falabella</button>
@@ -607,9 +614,10 @@ function renderPaydays(){
       <div class="pd-date">${formatDate(pa.fecha)}</div>
       <div class="pd-label">Addi${otros1?' + otros':''}</div>
       <div class="row"><span>Ingreso</span><b>${formatCOP(state.income.day1)}</b></div>
-      <div class="row"><span>Addi</span><b>${formatCOP(pa.monto)}</b></div>
+      ${pa.monto?`<div class="row"><span>Addi</span><b>${formatCOP(pa.monto)}</b></div>`:''}
       ${otros1?`<div class="row"><span>Otros</span><b>${formatCOP(otros1)}</b></div>`:''}
       <div class="margen ${margen1>=0?'pos':'neg'}">Margen: ${formatCOP(margen1)}</div>
+      ${vencidaA?'<div class="alert-box warning" style="margin-top:10px;padding:8px 10px;"><div class="alert-msg" style="font-size:12px;">Ya pasó esta fecha y el mes no se ha cerrado.</div></div>':''}
       <button class="pd-btn" onclick="verDetallePayday('addi')">Ver detalles</button>
       <button class="pd-btn" ${bA.disabled?'disabled':''} ${bA.title?`title="${bA.title}"`:''} onclick="${bA.onclick}">${bA.label}</button>
       <button class="pd-btn" onclick="cerrarMesAddi()" ${(!puedeCerrar('addi')||pa.monto===0)?'disabled':''}>Cerrar mes Addi</button>
