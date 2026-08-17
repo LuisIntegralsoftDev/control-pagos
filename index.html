@@ -464,6 +464,13 @@ function quincenaCanonica(fecha, dia){
 function estadoQuincena(fecha){
   return state.quincenasCerradas.find(q=>q.fecha===fecha);
 }
+function calendarAnchor(diaNum){
+  const siguiente = nextOccurrence(diaNum);
+  const anterior = addMonths(siguiente, -1);
+  const q = estadoQuincena(anterior);
+  if(!q || !q.cerrada) return anterior;
+  return siguiente;
+}
 function cerrarQuincena(fecha){
   const dias = daysUntil(fecha);
   if(dias===null || dias>0){
@@ -548,7 +555,7 @@ function renderDebtHero(){
 }
 
 function proximoFalabella(){
-  const calFecha = nextOccurrence(15);
+  const calFecha = calendarAnchor(15);
   const propFecha = state.falabella.proximaFecha || calFecha;
   const fecha = (propFecha < calFecha) ? propFecha : calFecha;
   const k = state.falabella.proximaFecha ? monthsBetween(state.falabella.proximaFecha, fecha) : 0;
@@ -559,7 +566,7 @@ function proximoFalabella(){
   return { fecha, monto: sum+cargos, items };
 }
 function proximoAddi(){
-  const calFecha = nextOccurrence(1);
+  const calFecha = calendarAnchor(1);
   const propFecha = state.addi.proximaFecha || calFecha;
   const fecha = (propFecha < calFecha) ? propFecha : calFecha;
   const grandeMeses = (state.addi.grande.esTuyo && state.addi.grande.cuotaFija>0)
