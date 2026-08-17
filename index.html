@@ -468,7 +468,9 @@ function calendarAnchor(diaNum){
   const siguiente = nextOccurrence(diaNum);
   const anterior = addMonths(siguiente, -1);
   const q = estadoQuincena(anterior);
-  if(!q || !q.cerrada) return anterior;
+  if(q && q.cerrada) return siguiente;
+  const pendientes = itemsOtrosNoFijosEnMes(diaNum, anterior.slice(0,7));
+  if(pendientes.length>0) return anterior;
   return siguiente;
 }
 function cerrarQuincena(fecha){
