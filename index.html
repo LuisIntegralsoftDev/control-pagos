@@ -158,6 +158,13 @@
   .payday-card.solo .pd-label{font-size:12px;margin-bottom:18px;}
   .payday-card.solo .margen{font-size:32px;}
 
+  .margen-card{background:var(--paper);border:1px solid var(--sage);border-radius:12px;padding:16px 18px;margin-bottom:16px;}
+  .margen-card .mc-label{font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);margin-bottom:4px;}
+  .margen-card .mc-amount{font-family:'Fraunces',serif;font-weight:700;font-size:26px;margin-bottom:10px;}
+  .margen-card .mc-amount.pos{color:var(--sage);}
+  .margen-card .mc-amount.neg{color:var(--red);}
+  .margen-card .mc-hist{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);max-height:140px;overflow-y:auto;}
+
   .proj-card{border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:10px;background:var(--paper);}
   .proj-card .proj-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px dashed var(--line);}
   .proj-card .pmes{font-family:'Fraunces',serif;font-weight:600;font-size:15px;color:var(--navy);text-transform:capitalize;}
@@ -210,6 +217,7 @@
 
   <section class="view" id="view-resumen">
     <div class="debt-hero" id="debt-hero"></div>
+    <div id="margen-disponible-card"></div>
     <div class="paydays" id="paydays"></div>
     <button class="btn-ingreso" onclick="openIncome()">Editar ingresos</button>
 
@@ -310,7 +318,9 @@ const DEFAULT_STATE = {
   deudaSnapshots: [],
   ahorros: [],
   ahorroPinHash: null,
-  quincenasCerradas: []
+  quincenasCerradas: [],
+  margenDisponible: 0,
+  margenMovimientos: []
 };
 
 let state = null;
@@ -364,6 +374,8 @@ async function loadState(){
     if(!state.ahorros) state.ahorros = [];
     if(state.ahorroPinHash===undefined) state.ahorroPinHash = null;
     if(!state.quincenasCerradas) state.quincenasCerradas = [];
+    if(state.margenDisponible===undefined) state.margenDisponible = 0;
+    if(!state.margenMovimientos) state.margenMovimientos = [];
   } else {
     state = JSON.parse(JSON.stringify(DEFAULT_STATE));
     await sb.from('pagos_estado').insert({ user_id: user.id, data: state });
@@ -482,8 +494,28 @@ function cerrarQuincena(fecha){
     customAlert(`Todavía faltan ${dias} día(s) para el ${formatDate(fecha)}. Espera a que llegue la fecha de pago para poder cerrar la quincena.`, 'warning');
     return;
   }
-  customConfirm(`¿Cerrar la quincena del ${formatDate(fecha)}? Los gastos "solo esta vez" de esa fecha quedarán bloqueados y no se podrán quitar ni agregar más ahí.`, 'warning', (ok)=>{
+  customConfirm(`¿Cerrar la quincena del ${formatDate(fecha)}? Los gastos "solo esta vez" de esa fecha quedarán bloqueados, y el margen que te quede se guarda como disponible.`, 'warning', (ok)=>{
     if(!ok) return;
+    const esDia15 = fecha.slice(8,10)==='15';
+    let ingreso, compromiso;
+    if(esDia15){
+      const pf = proximoFalabella();
+      const of = itemsOtrosFijos(15).reduce((s,it)=>s+it.monto,0);
+      const onf = itemsOtrosNoFijosEnFecha(15, fecha).reduce((s,it)=>s+it.monto,0);
+      ingreso = state.income.day15;
+      compromiso = pf.monto + of + onf;
+    } else {
+      const pa = proximoAddi();
+      const of = itemsOtrosFijos(1).reduce((s,it)=>s+it.monto,0);
+      const onf = itemsOtrosNoFijosEnFecha(1, fecha).reduce((s,it)=>s+it.monto,0);
+      ingreso = state.income.day1;
+      compromiso = pa.monto + of + onf;
+    }
+    const margen = ingreso - compromiso;
+    state.margenDisponible = (state.margenDisponible||0) + margen;
+    state.margenMovimientos = state.margenMovimientos || [];
+    state.margenMovimientos.unshift({ fecha, tipo: margen>=0?'ingreso':'ajuste', monto: margen, desc:`Margen de la quincena del ${formatDate(fecha)}` });
+
     let q = estadoQuincena(fecha);
     if(!q){ q = {fecha, cerrada:true, reaberturas:0}; state.quincenasCerradas.push(q); }
     else { q.cerrada = true; }
@@ -542,7 +574,7 @@ function otrosNoFijoEnMes(dia, ymStr){
 }
 function otrosTotal(){ return state.otros.reduce((s,o)=>s+o.monto,0); }
 
-function render(){ renderDebtHero(); renderPaydays(); renderGrid(); renderOtros(); renderHistorial(); renderDeudaChart(); renderAhorros(); renderProyeccion(); }
+function render(){ renderDebtHero(); renderMargenDisponible(); renderPaydays(); renderGrid(); renderOtros(); renderHistorial(); renderDeudaChart(); renderAhorros(); renderProyeccion(); }
 
 function renderDebtHero(){
   const f = falabellaPendienteTotal();
@@ -559,6 +591,45 @@ function renderDebtHero(){
       <div>Fijos<b>${formatCOP(fijos)}</b></div>
     </div>
   `;
+}
+
+function renderMargenDisponible(){
+  const el = document.getElementById('margen-disponible-card');
+  if(!el) return;
+  const m = state.margenDisponible||0;
+  const hist = (state.margenMovimientos||[]).slice(0,5).map(mv=>{
+    const color = mv.monto>=0 ? 'var(--sage)' : 'var(--red)';
+    const signo = mv.monto>=0 ? '+' : '';
+    return `<div class="cp"><div><div class="desc">${mv.desc}</div><div class="date">${formatDate(mv.fecha)}</div></div><div class="amt" style="color:${color};">${signo}${formatCOP(mv.monto)}</div></div>`;
+  }).join('') || '<div class="cp"><span class="date">Sin movimientos todavía</span></div>';
+  el.innerHTML = `
+    <div class="margen-card">
+      <div class="mc-label">Margen disponible</div>
+      <div class="mc-amount ${m>=0?'pos':'neg'}">${formatCOP(m)}</div>
+      <button class="small ghost" onclick="openGastoMargenModal()">− Gastar de aquí</button>
+      <div class="mc-hist">${hist}</div>
+    </div>
+  `;
+}
+function openGastoMargenModal(){
+  const today = new Date().toISOString().slice(0,10);
+  showModal(`
+    <h3>Gastar del margen disponible</h3>
+    <div class="field-m"><label>Descripción</label><input type="text" id="gm-desc" placeholder="Ej: Almuerzo, taxi, imprevisto"></div>
+    <div class="field-m"><label>Monto</label><input type="number" id="gm-monto" placeholder="Ej: 20000"></div>
+    <div class="field-m"><label>Fecha</label><input type="date" id="gm-fecha" value="${today}"></div>
+    <div class="hint" style="margin-top:-6px;">Esto ya lo pagaste con dinero que ya tenías — no genera una cuenta por pagar nueva.</div>
+    <div class="modal-actions"><button class="ghost" onclick="closeModal()">Cancelar</button><button class="primary" onclick="saveGastoMargen()">Guardar</button></div>
+  `);
+}
+function saveGastoMargen(){
+  const desc = document.getElementById('gm-desc').value || 'Gasto';
+  const monto = parseFloat(document.getElementById('gm-monto').value)||0;
+  const fecha = document.getElementById('gm-fecha').value || new Date().toISOString().slice(0,10);
+  if(monto<=0){ closeModal(); return; }
+  state.margenDisponible = (state.margenDisponible||0) - monto;
+  state.margenMovimientos.unshift({fecha, tipo:'gasto', monto:-monto, desc});
+  closeModal(); render(); saveState();
 }
 
 function proximoFalabella(){
@@ -1060,7 +1131,11 @@ function openOtroModal(){
       <option value="cuotas">A cuotas</option>
     </select></div>
     <div class="field-m" id="om-monto-wrap"><label id="om-monto-label">Monto</label><input type="number" id="om-monto" placeholder="Ej: 50000"></div>
-    <div class="field-m" id="om-fecha-wrap"><label>¿Qué día fue (o va a ser) el gasto?</label><input type="date" id="om-fecha"><div class="hint">El sistema calcula solo si sale del ingreso del 1 o del 15.</div></div>
+    <div class="field-m" id="om-origen-wrap"><label>¿Cómo se paga esto?</label><select id="om-origen" onchange="toggleOtroModalFecha()">
+      <option value="futuro">Se paga con un próximo ingreso</option>
+      <option value="margen">Ya lo pagué con mi margen disponible (${formatCOP(state.margenDisponible||0)})</option>
+    </select></div>
+    <div class="field-m" id="om-fecha-wrap"><label id="om-fecha-label">¿Qué día fue (o va a ser) el gasto?</label><input type="date" id="om-fecha"><div class="hint" id="om-fecha-hint">El sistema calcula solo si sale del ingreso del 1 o del 15.</div></div>
     <div class="field-m" id="om-ahorro-wrap"><label>¿Va para un ahorro?</label><select id="om-ahorro"><option value="">No, es un gasto normal</option>${opcionesAhorro}</select><div class="hint">Si eliges uno, también se suma a ese ahorro.</div></div>
     <div class="field-m" id="om-dia-wrap" style="display:none;"><label>Se paga con el ingreso del</label><select id="om-dia"><option value="15">Día 15</option><option value="1">Día 1</option></select></div>
     <div class="field-m" id="om-cuotastot-wrap" style="display:none;"><label>Número de cuotas</label><input type="number" id="om-cuotastotales" min="1" value="3"></div>
@@ -1074,20 +1149,34 @@ function toggleOtroModalFecha(){
   const diaWrap = document.getElementById('om-dia-wrap');
   const fechaWrap = document.getElementById('om-fecha-wrap');
   const ahorroWrap = document.getElementById('om-ahorro-wrap');
+  const origenWrap = document.getElementById('om-origen-wrap');
   const cuotasTotWrap = document.getElementById('om-cuotastot-wrap');
   const cuotasFechaWrap = document.getElementById('om-cuotafecha-wrap');
   const montoLabel = document.getElementById('om-monto-label');
+  const fechaLabel = document.getElementById('om-fecha-label');
+  const fechaHint = document.getElementById('om-fecha-hint');
 
   diaWrap.style.display = 'none';
   fechaWrap.style.display = 'none';
   ahorroWrap.style.display = 'none';
+  origenWrap.style.display = 'none';
   cuotasTotWrap.style.display = 'none';
   cuotasFechaWrap.style.display = 'none';
 
   if(tipo==='unico'){
-    fechaWrap.style.display = 'block';
+    origenWrap.style.display = 'block';
     ahorroWrap.style.display = 'block';
     montoLabel.textContent = 'Monto';
+    const origen = document.getElementById('om-origen').value;
+    if(origen==='margen'){
+      fechaWrap.style.display = 'block';
+      fechaLabel.textContent = '¿Qué día lo pagaste?';
+      fechaHint.textContent = 'Solo para tu registro — esto ya no se descuenta de ningún ingreso futuro.';
+    } else {
+      fechaWrap.style.display = 'block';
+      fechaLabel.textContent = '¿Qué día fue (o va a ser) el gasto?';
+      fechaHint.textContent = 'El sistema calcula solo si sale del ingreso del 1 o del 15.';
+    }
     if(!document.getElementById('om-fecha').value){
       document.getElementById('om-fecha').value = new Date().toISOString().slice(0,10);
     }
@@ -1112,13 +1201,30 @@ function saveOtroModal(){
   if(tipo==='unico'){
     const fecha = document.getElementById('om-fecha').value || new Date().toISOString().slice(0,10);
     const dia = diaFromFecha(fecha);
+    const origen = document.getElementById('om-origen').value;
+    const ahorroId = document.getElementById('om-ahorro').value;
+
+    if(origen==='margen'){
+      state.margenDisponible = (state.margenDisponible||0) - monto;
+      state.margenMovimientos = state.margenMovimientos || [];
+      state.margenMovimientos.unshift({ fecha, tipo:'gasto', monto:-monto, desc });
+      if(ahorroId){
+        const ahorro = state.ahorros.find(a=>a.id===ahorroId);
+        if(ahorro){
+          ahorro.saldo += monto;
+          ahorro.movimientos.unshift({ fecha, tipo:'deposito', monto });
+        }
+      }
+      closeModal(); render(); saveState();
+      return;
+    }
+
     const qFecha = quincenaCanonica(fecha, dia);
     const q = estadoQuincena(qFecha);
     if(q && q.cerrada){
       customAlert(`La quincena del ${formatDate(qFecha)} ya está cerrada. No puedes agregar gastos ahí.`, 'error');
       closeModal(); return;
     }
-    const ahorroId = document.getElementById('om-ahorro').value;
     item = {desc, monto, tipo, dia, fecha};
     if(ahorroId){
       const ahorro = state.ahorros.find(a=>a.id===ahorroId);
