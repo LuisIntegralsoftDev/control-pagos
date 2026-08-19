@@ -497,24 +497,26 @@ function cerrarQuincena(fecha){
   customConfirm(`¿Cerrar la quincena del ${formatDate(fecha)}? Los gastos "solo esta vez" de esa fecha quedarán bloqueados, y el margen que te quede se guarda como disponible.`, 'warning', (ok)=>{
     if(!ok) return;
     const esDia15 = fecha.slice(8,10)==='15';
-    let ingreso, compromiso;
+    let ingreso, compromiso, detalle;
     if(esDia15){
       const pf = proximoFalabella();
-      const of = itemsOtrosFijos(15).reduce((s,it)=>s+it.monto,0);
-      const onf = itemsOtrosNoFijosEnFecha(15, fecha).reduce((s,it)=>s+it.monto,0);
+      const itemsOF = itemsOtrosFijos(15);
+      const itemsONF = itemsOtrosNoFijosEnFecha(15, fecha);
       ingreso = state.income.day15;
-      compromiso = pf.monto + of + onf;
+      compromiso = pf.monto + itemsOF.reduce((s,it)=>s+it.monto,0) + itemsONF.reduce((s,it)=>s+it.monto,0);
+      detalle = { cuentaLabel:'Falabella', cuenta: pf.items, otrosFijos: itemsOF, otrosNoFijos: itemsONF };
     } else {
       const pa = proximoAddi();
-      const of = itemsOtrosFijos(1).reduce((s,it)=>s+it.monto,0);
-      const onf = itemsOtrosNoFijosEnFecha(1, fecha).reduce((s,it)=>s+it.monto,0);
+      const itemsOF = itemsOtrosFijos(1);
+      const itemsONF = itemsOtrosNoFijosEnFecha(1, fecha);
       ingreso = state.income.day1;
-      compromiso = pa.monto + of + onf;
+      compromiso = pa.monto + itemsOF.reduce((s,it)=>s+it.monto,0) + itemsONF.reduce((s,it)=>s+it.monto,0);
+      detalle = { cuentaLabel:'Addi', cuenta: pa.items, otrosFijos: itemsOF, otrosNoFijos: itemsONF };
     }
     const margen = ingreso - compromiso;
     state.margenDisponible = (state.margenDisponible||0) + margen;
     state.margenMovimientos = state.margenMovimientos || [];
-    state.margenMovimientos.unshift({ fecha, tipo: margen>=0?'ingreso':'ajuste', monto: margen, desc:`Margen de la quincena del ${formatDate(fecha)}` });
+    state.margenMovimientos.unshift({ fecha, tipo: margen>=0?'ingreso':'ajuste', monto: margen, desc:`Margen de la quincena del ${formatDate(fecha)}`, detalle });
 
     let q = estadoQuincena(fecha);
     if(!q){ q = {fecha, cerrada:true, reaberturas:0}; state.quincenasCerradas.push(q); }
@@ -597,10 +599,11 @@ function renderMargenDisponible(){
   const el = document.getElementById('margen-disponible-card');
   if(!el) return;
   const m = state.margenDisponible||0;
-  const hist = (state.margenMovimientos||[]).slice(0,5).map(mv=>{
+  const hist = (state.margenMovimientos||[]).slice(0,8).map((mv,i)=>{
     const color = mv.monto>=0 ? 'var(--sage)' : 'var(--red)';
     const signo = mv.monto>=0 ? '+' : '';
-    return `<div class="cp"><div><div class="desc">${mv.desc}</div><div class="date">${formatDate(mv.fecha)}</div></div><div class="amt" style="color:${color};">${signo}${formatCOP(mv.monto)}</div></div>`;
+    const verBtn = mv.detalle ? ` · <span onclick="verDetalleMargen(${i})" style="cursor:pointer;text-decoration:underline;">ver detalles</span>` : '';
+    return `<div class="cp"><div><div class="desc">${mv.desc}</div><div class="date">${formatDate(mv.fecha)}${verBtn}</div></div><div class="amt" style="color:${color};">${signo}${formatCOP(mv.monto)}</div></div>`;
   }).join('') || '<div class="cp"><span class="date">Sin movimientos todavía</span></div>';
   el.innerHTML = `
     <div class="margen-card">
@@ -610,6 +613,17 @@ function renderMargenDisponible(){
       <div class="mc-hist">${hist}</div>
     </div>
   `;
+}
+function verDetalleMargen(i){
+  const mv = (state.margenMovimientos||[])[i];
+  if(!mv || !mv.detalle) return;
+  const d = mv.detalle;
+  const cuerpo = renderDetalleGrupo(d.cuentaLabel, d.cuenta) + renderDetalleGrupo('Otros fijos', d.otrosFijos) + renderDetalleGrupo('Otros no fijos', d.otrosNoFijos);
+  showModal(`
+    <h3>${mv.desc}</h3>
+    ${cuerpo || '<p style="font-size:13px;color:var(--ink-soft);">Nada que desglosar — no había nada pendiente esa quincena.</p>'}
+    <div class="modal-actions"><button class="primary" onclick="closeModal()">Cerrar</button></div>
+  `);
 }
 function openGastoMargenModal(){
   const today = new Date().toISOString().slice(0,10);
