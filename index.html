@@ -11,6 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Pagos">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
   :root{
@@ -223,7 +224,9 @@
 
     <div class="otros-card">
       <h3>De un vistazo</h3>
-      <div id="flujo-dinero"></div>
+      <p id="flujo-dinero-empty" style="font-size:13px;color:var(--ink-soft);display:none;">Agrega tus ingresos y cuentas para ver el reparto de tu dinero.</p>
+      <div id="flujo-dinero" style="width:100%;height:270px;"></div>
+      <p id="flujo-dinero-warn" style="font-size:12px;color:var(--red);margin-top:8px;"></p>
     </div>
 
     <button class="btn-gastos" onclick="showView('otros')">+ Otros pagos o gastos fijos</button>
@@ -262,12 +265,14 @@
 
     <div class="otros-card">
       <h3>Tendencia de tu deuda</h3>
-      <div id="deuda-chart"></div>
+      <p id="deuda-chart-empty" style="font-size:13px;color:var(--ink-soft);display:none;"></p>
+      <div id="deuda-chart" style="width:100%;height:240px;"></div>
     </div>
 
     <div class="otros-card">
       <h3>Tendencia mensual por categoría</h3>
-      <div id="barras-apiladas"></div>
+      <p id="barras-apiladas-empty" style="font-size:13px;color:var(--ink-soft);display:none;">Aún no hay suficiente historial — cierra un mes o una quincena para empezar a ver la tendencia.</p>
+      <div id="barras-apiladas" style="width:100%;height:270px;"></div>
     </div>
   </section>
 
@@ -356,6 +361,10 @@ function showView(name){
   document.querySelectorAll('.view').forEach(v=> v.style.display = (v.id==='view-'+name) ? 'block' : 'none');
   document.querySelectorAll('.side-drawer button[data-view]').forEach(b=> b.classList.toggle('active', b.dataset.view===name));
   window.scrollTo(0,0);
+  setTimeout(()=>{
+    if(name==='resumen') resizeChartIfExists('flujo-dinero');
+    if(name==='historial'){ resizeChartIfExists('deuda-chart'); resizeChartIfExists('barras-apiladas'); }
+  }, 60);
 }
 function toggleDrawer(){
   document.getElementById('sideDrawer').classList.toggle('open');
@@ -929,45 +938,57 @@ function getDeudaPoints(){
   pts.sort((a,b)=>a.fecha.localeCompare(b.fecha));
   return pts;
 }
+function getOrInitChart(el){
+  let inst = echarts.getInstanceByDom(el);
+  if(!inst) inst = echarts.init(el);
+  return inst;
+}
+function resizeChartIfExists(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  const inst = echarts.getInstanceByDom(el);
+  if(inst) inst.resize();
+}
+
 function renderDeudaChart(){
   const el = document.getElementById('deuda-chart');
+  const emptyEl = document.getElementById('deuda-chart-empty');
   const pts = getDeudaPoints();
   if(pts.length<2){
-    el.innerHTML = `<p style="font-size:13px;color:var(--ink-soft);">Cierra al menos un mes (Falabella o Addi) para empezar a ver la tendencia. Por ahora, tu deuda es <b>${formatCOP(pts[0]?pts[0].total:0)}</b>.</p>`;
+    el.style.display = 'none';
+    if(emptyEl){
+      emptyEl.style.display = 'block';
+      emptyEl.innerHTML = `Cierra al menos un mes (Falabella o Addi) para empezar a ver la tendencia. Por ahora, tu deuda es <b>${formatCOP(pts[0]?pts[0].total:0)}</b>.`;
+    }
     return;
   }
-  const W=680, H=220, padL=10, padR=10, padT=26, padB=30;
-  const values = pts.map(p=>p.total);
-  const maxV = Math.max(...values);
-  const minV = Math.min(0, Math.min(...values));
-  const rangeV = (maxV-minV) || 1;
-  const stepX = pts.length>1 ? (W-padL-padR)/(pts.length-1) : 0;
-  const xy = pts.map((p,i)=>{
-    const x = padL + i*stepX;
-    const y = padT + (H-padT-padB) * (1 - (p.total-minV)/rangeV);
-    return { x, y, ...p };
-  });
-  const linePath = xy.map((p,i)=> (i===0?'M':'L')+p.x.toFixed(1)+','+p.y.toFixed(1)).join(' ');
-  const areaPath = linePath + ` L${xy[xy.length-1].x.toFixed(1)},${(H-padB).toFixed(1)} L${xy[0].x.toFixed(1)},${(H-padB).toFixed(1)} Z`;
-  const circles = xy.map(p=>`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4" fill="#A24132" stroke="#FBF9F4" stroke-width="1.5"/>`).join('');
-  const showLabel = (i)=> i===0 || i===xy.length-1 || xy[i].total===maxV || xy[i].total===minV;
-  const labels = xy.map((p,i)=> showLabel(i) ? `<text x="${p.x.toFixed(1)}" y="${Math.max(12,p.y-10).toFixed(1)}" font-size="11" text-anchor="middle" font-family="IBM Plex Mono, monospace" fill="#1C2A46">${formatCOPShort(p.total)}</text>` : '').join('');
-  const skip = Math.ceil(xy.length/6) || 1;
-  const dateLabels = xy.map((p,i)=> (i%skip===0 || i===xy.length-1) ? `<text x="${p.x.toFixed(1)}" y="${H-10}" font-size="10" text-anchor="middle" font-family="IBM Plex Mono, monospace" fill="#6B6759">${formatDateShort(p.fecha)}</text>` : '').join('');
+  el.style.display = 'block';
+  if(emptyEl) emptyEl.style.display = 'none';
 
-  el.innerHTML = `
-    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;">
-      <path d="${areaPath}" fill="#A24132" fill-opacity="0.08" stroke="none"/>
-      <path d="${linePath}" fill="none" stroke="#A24132" stroke-width="2.5"/>
-      ${circles}
-      ${labels}
-      ${dateLabels}
-    </svg>
-  `;
+  const chart = getOrInitChart(el);
+  chart.setOption({
+    backgroundColor: 'transparent',
+    grid: { left: 54, right: 16, top: 24, bottom: 30 },
+    tooltip: { trigger:'axis', valueFormatter: v=>formatCOP(v) },
+    xAxis: { type:'category', data: pts.map(p=>formatDateShort(p.fecha)), boundaryGap:false,
+      axisLine:{lineStyle:{color:'#DED7C4'}}, axisLabel:{fontFamily:"'IBM Plex Mono', monospace", fontSize:10, color:'#6B6759'} },
+    yAxis: { type:'value', axisLabel:{formatter:v=>formatCOPShort(v), fontFamily:"'IBM Plex Mono', monospace", fontSize:10, color:'#6B6759'},
+      splitLine:{lineStyle:{color:'#EFE9D8'}} },
+    series: [{
+      type:'line', data: pts.map(p=>p.total), smooth:true, symbol:'circle', symbolSize:7,
+      lineStyle:{color:'#A24132', width:3},
+      itemStyle:{color:'#A24132', borderColor:'#FBF9F4', borderWidth:2},
+      areaStyle:{ color:{ type:'linear', x:0,y:0,x2:0,y2:1, colorStops:[
+        {offset:0, color:'rgba(162,65,50,0.30)'}, {offset:1, color:'rgba(162,65,50,0)'}
+      ]}}
+    }]
+  }, true);
 }
 
 function renderFlujoDinero(){
   const el = document.getElementById('flujo-dinero');
+  const emptyEl = document.getElementById('flujo-dinero-empty');
+  const warnEl = document.getElementById('flujo-dinero-warn');
   if(!el) return;
   const ingresoMensual = (state.income.day15||0) + (state.income.day1||0);
   const falabella = falabellaUsado();
@@ -983,51 +1004,45 @@ function renderFlujoDinero(){
     {label:'Addi', valor:addi, color:'#7A2E22'},
     {label:'Otros fijos', valor:otrosFijos, color:'#B4842A'},
     {label:'Ahorro', valor:ahorroAportes, color:'#5B7A5E'},
-    {label:'Margen libre', valor:margen, color:'#93B597'}
+    {label:'Margen libre', valor:margen, color:'#7FA687'}
   ].filter(c=>c.valor>0);
 
   if(!categorias.length || ingresoMensual<=0){
-    el.innerHTML = '<p style="font-size:13px;color:var(--ink-soft);">Agrega tus ingresos y cuentas para ver el reparto de tu dinero.</p>';
+    el.style.display = 'none';
+    if(emptyEl) emptyEl.style.display = 'block';
+    if(warnEl) warnEl.textContent = '';
     return;
   }
+  el.style.display = 'block';
+  if(emptyEl) emptyEl.style.display = 'none';
+  if(warnEl) warnEl.textContent = negativo ? 'Tus compromisos actuales superan tu ingreso mensual — no queda margen libre.' : '';
 
-  const total = categorias.reduce((s,c)=>s+c.valor,0) || 1;
-  const W=680, H=Math.max(180, categorias.length*46), padY=14;
-  const leftX=16, leftW=22, rightX=W-190, rightW=22;
-  const usableH = H - padY*2;
+  const nodes = [
+    { name:'Ingreso mensual', itemStyle:{color:'#1C2A46'} },
+    ...categorias.map(c=>({ name:c.label, itemStyle:{color:c.color} }))
+  ];
+  const links = categorias.map(c=>({ source:'Ingreso mensual', target:c.label, value:c.valor }));
 
-  let cursor = padY;
-  const flows = categorias.map(c=>{
-    const h = (c.valor/total)*usableH;
-    const f = { ...c, y0:cursor, y1:cursor+h };
-    cursor += h;
-    return f;
-  });
-
-  const midX = (leftX+leftW + rightX)/2;
-  const paths = flows.map(f=>{
-    const d = `M${leftX+leftW},${f.y0.toFixed(1)} C${midX},${f.y0.toFixed(1)} ${midX},${f.y0.toFixed(1)} ${rightX},${f.y0.toFixed(1)} L${rightX},${f.y1.toFixed(1)} C${midX},${f.y1.toFixed(1)} ${midX},${f.y1.toFixed(1)} ${leftX+leftW},${f.y1.toFixed(1)} Z`;
-    return `<path d="${d}" fill="${f.color}" fill-opacity="0.5"/>`;
-  }).join('');
-
-  const rightBlocks = flows.map(f=>{
-    const midYtext = (f.y0+f.y1)/2;
-    return `
-      <rect x="${rightX}" y="${f.y0.toFixed(1)}" width="${rightW}" height="${(f.y1-f.y0).toFixed(1)}" fill="${f.color}"/>
-      <text x="${rightX+rightW+8}" y="${(midYtext-3).toFixed(1)}" font-size="12" font-family="Inter, sans-serif" fill="#232739">${f.label}</text>
-      <text x="${rightX+rightW+8}" y="${(midYtext+12).toFixed(1)}" font-size="11" font-family="IBM Plex Mono, monospace" fill="#6B6759">${formatCOP(f.valor)}</text>
-    `;
-  }).join('');
-
-  el.innerHTML = `
-    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;">
-      <rect x="${leftX}" y="${padY}" width="${leftW}" height="${usableH}" fill="#1C2A46"/>
-      <text x="${leftX}" y="${padY-6}" font-size="12" font-family="Inter, sans-serif" fill="#1C2A46" font-weight="600">Ingreso mensual</text>
-      ${paths}
-      ${rightBlocks}
-    </svg>
-    ${negativo ? '<p style="font-size:12px;color:var(--red);margin-top:8px;">Tus compromisos actuales superan tu ingreso mensual — no queda margen libre.</p>' : ''}
-  `;
+  const chart = getOrInitChart(el);
+  chart.setOption({
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger:'item', triggerOn:'mousemove',
+      formatter: p => p.dataType==='edge' ? `${p.data.target}: ${formatCOP(p.data.value)}` : `${p.name}`
+    },
+    series: [{
+      type:'sankey',
+      data:nodes,
+      links:links,
+      emphasis:{ focus:'adjacency' },
+      lineStyle:{ color:'gradient', opacity:0.45, curveness:0.55 },
+      label:{ fontFamily:"'Inter', sans-serif", fontSize:12, color:'#232739',
+        formatter: p => p.name==='Ingreso mensual' ? p.name : `${p.name}\n${formatCOP(categorias.find(c=>c.label===p.name)?.valor||0)}` },
+      nodeWidth:18,
+      nodeGap:16,
+      left:10, right:170, top:10, bottom:10
+    }]
+  }, true);
 }
 
 function mesLabelCorto(ym){
@@ -1059,45 +1074,38 @@ function datosBarrasApiladas(){
 }
 function renderBarrasApiladas(){
   const el = document.getElementById('barras-apiladas');
+  const emptyEl = document.getElementById('barras-apiladas-empty');
   if(!el) return;
   const datos = datosBarrasApiladas();
   if(!datos.length){
-    el.innerHTML = '<p style="font-size:13px;color:var(--ink-soft);">Aún no hay suficiente historial — cierra un mes o una quincena para empezar a ver la tendencia.</p>';
+    el.style.display = 'none';
+    if(emptyEl) emptyEl.style.display = 'block';
     return;
   }
-  const W=680, H=250, padL=10, padR=10, padT=24, padB=40;
-  const totales = datos.map(d=>d.falabella+d.addi+d.otros+d.ahorro);
-  const maxTotal = Math.max(...totales) || 1;
-  const n = datos.length;
-  const barW = Math.min(64, (W-padL-padR)/n - 16);
-  const gap = (W-padL-padR-barW*n)/(n+1);
+  el.style.display = 'block';
+  if(emptyEl) emptyEl.style.display = 'none';
+
+  const meses = datos.map(d=>mesLabelCorto(d.ym));
   const colores = {falabella:'#A24132', addi:'#7A2E22', otros:'#B4842A', ahorro:'#5B7A5E'};
   const nombres = {falabella:'Falabella', addi:'Addi', otros:'Otros', ahorro:'Ahorro'};
+  const claves = ['falabella','addi','otros','ahorro'];
 
-  let bars = '';
-  datos.forEach((d,i)=>{
-    const x = padL + gap*(i+1) + barW*i;
-    let yCursor = H-padB;
-    ['falabella','addi','otros','ahorro'].forEach(cat=>{
-      const val = d[cat];
-      if(val<=0) return;
-      const h = (val/maxTotal)*(H-padT-padB);
-      yCursor -= h;
-      bars += `<rect x="${x.toFixed(1)}" y="${yCursor.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" fill="${colores[cat]}" fill-opacity="0.85"/>`;
-    });
-    const total = d.falabella+d.addi+d.otros+d.ahorro;
-    bars += `<text x="${(x+barW/2).toFixed(1)}" y="${(yCursor-6).toFixed(1)}" font-size="10" text-anchor="middle" font-family="IBM Plex Mono, monospace" fill="#1C2A46">${formatCOPShort(total)}</text>`;
-    bars += `<text x="${(x+barW/2).toFixed(1)}" y="${(H-padB+16).toFixed(1)}" font-size="10" text-anchor="middle" font-family="IBM Plex Mono, monospace" fill="#6B6759">${mesLabelCorto(d.ym)}</text>`;
-  });
-
-  const leyenda = Object.keys(colores).map(k=>
-    `<span style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;"><span style="width:10px;height:10px;border-radius:2px;background:${colores[k]};display:inline-block;"></span>${nombres[k]}</span>`
-  ).join('');
-
-  el.innerHTML = `
-    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;">${bars}</svg>
-    <div style="font-size:11px;color:var(--ink-soft);margin-top:8px;">${leyenda}</div>
-  `;
+  const chart = getOrInitChart(el);
+  chart.setOption({
+    backgroundColor: 'transparent',
+    grid: { left: 54, right: 16, top: 40, bottom: 30 },
+    tooltip: { trigger:'axis', axisPointer:{type:'shadow'}, valueFormatter: v=>formatCOP(v) },
+    legend: { top:0, textStyle:{fontFamily:"'Inter', sans-serif", fontSize:11, color:'#6B6759'} },
+    xAxis: { type:'category', data: meses, axisLine:{lineStyle:{color:'#DED7C4'}},
+      axisLabel:{fontFamily:"'IBM Plex Mono', monospace", fontSize:10, color:'#6B6759'} },
+    yAxis: { type:'value', axisLabel:{formatter:v=>formatCOPShort(v), fontFamily:"'IBM Plex Mono', monospace", fontSize:10, color:'#6B6759'},
+      splitLine:{lineStyle:{color:'#EFE9D8'}} },
+    series: claves.map((k,idx)=>({
+      name: nombres[k], type:'bar', stack:'total', data: datos.map(d=>d[k]),
+      itemStyle:{ color:colores[k], borderRadius: idx===claves.length-1 ? [4,4,0,0] : 0 },
+      barMaxWidth: 46
+    }))
+  }, true);
 }
 
 let projView = 'mes';
@@ -1773,6 +1781,9 @@ function simular(){
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=> navigator.serviceWorker.register('sw.js').catch(()=>{}));
 }
+window.addEventListener('resize', ()=>{
+  ['flujo-dinero','deuda-chart','barras-apiladas'].forEach(resizeChartIfExists);
+});
 </script>
 </body>
 </html>
