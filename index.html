@@ -221,6 +221,11 @@
     <div class="paydays" id="paydays"></div>
     <button class="btn-ingreso" onclick="openIncome()">Editar ingresos</button>
 
+    <div class="otros-card">
+      <h3>De un vistazo</h3>
+      <div id="flujo-dinero"></div>
+    </div>
+
     <button class="btn-gastos" onclick="showView('otros')">+ Otros pagos o gastos fijos</button>
 
     <div class="sim">
@@ -258,6 +263,11 @@
     <div class="otros-card">
       <h3>Tendencia de tu deuda</h3>
       <div id="deuda-chart"></div>
+    </div>
+
+    <div class="otros-card">
+      <h3>Tendencia mensual por categoría</h3>
+      <div id="barras-apiladas"></div>
     </div>
   </section>
 
@@ -576,7 +586,7 @@ function otrosNoFijoEnMes(dia, ymStr){
 }
 function otrosTotal(){ return state.otros.reduce((s,o)=>s+o.monto,0); }
 
-function render(){ renderDebtHero(); renderMargenDisponible(); renderPaydays(); renderGrid(); renderOtros(); renderHistorial(); renderDeudaChart(); renderAhorros(); renderProyeccion(); }
+function render(){ renderDebtHero(); renderMargenDisponible(); renderPaydays(); renderFlujoDinero(); renderGrid(); renderOtros(); renderHistorial(); renderDeudaChart(); renderBarrasApiladas(); renderAhorros(); renderProyeccion(); }
 
 function renderDebtHero(){
   const f = falabellaPendienteTotal();
@@ -953,6 +963,140 @@ function renderDeudaChart(){
       ${labels}
       ${dateLabels}
     </svg>
+  `;
+}
+
+function renderFlujoDinero(){
+  const el = document.getElementById('flujo-dinero');
+  if(!el) return;
+  const ingresoMensual = (state.income.day15||0) + (state.income.day1||0);
+  const falabella = falabellaUsado();
+  const addi = addiUsado();
+  const otrosFijos = state.otros.filter(o=>(o.tipo||'fijo')==='fijo').reduce((s,o)=>s+o.monto,0);
+  const ahorroAportes = state.otros.filter(o=>o.origenAhorro).reduce((s,o)=>s+o.monto,0);
+  let margen = ingresoMensual - falabella - addi - otrosFijos - ahorroAportes;
+  const negativo = margen < 0;
+  if(margen<0) margen = 0;
+
+  const categorias = [
+    {label:'Falabella', valor:falabella, color:'#A24132'},
+    {label:'Addi', valor:addi, color:'#7A2E22'},
+    {label:'Otros fijos', valor:otrosFijos, color:'#B4842A'},
+    {label:'Ahorro', valor:ahorroAportes, color:'#5B7A5E'},
+    {label:'Margen libre', valor:margen, color:'#93B597'}
+  ].filter(c=>c.valor>0);
+
+  if(!categorias.length || ingresoMensual<=0){
+    el.innerHTML = '<p style="font-size:13px;color:var(--ink-soft);">Agrega tus ingresos y cuentas para ver el reparto de tu dinero.</p>';
+    return;
+  }
+
+  const total = categorias.reduce((s,c)=>s+c.valor,0) || 1;
+  const W=680, H=Math.max(180, categorias.length*46), padY=14;
+  const leftX=16, leftW=22, rightX=W-190, rightW=22;
+  const usableH = H - padY*2;
+
+  let cursor = padY;
+  const flows = categorias.map(c=>{
+    const h = (c.valor/total)*usableH;
+    const f = { ...c, y0:cursor, y1:cursor+h };
+    cursor += h;
+    return f;
+  });
+
+  const midX = (leftX+leftW + rightX)/2;
+  const paths = flows.map(f=>{
+    const d = `M${leftX+leftW},${f.y0.toFixed(1)} C${midX},${f.y0.toFixed(1)} ${midX},${f.y0.toFixed(1)} ${rightX},${f.y0.toFixed(1)} L${rightX},${f.y1.toFixed(1)} C${midX},${f.y1.toFixed(1)} ${midX},${f.y1.toFixed(1)} ${leftX+leftW},${f.y1.toFixed(1)} Z`;
+    return `<path d="${d}" fill="${f.color}" fill-opacity="0.5"/>`;
+  }).join('');
+
+  const rightBlocks = flows.map(f=>{
+    const midYtext = (f.y0+f.y1)/2;
+    return `
+      <rect x="${rightX}" y="${f.y0.toFixed(1)}" width="${rightW}" height="${(f.y1-f.y0).toFixed(1)}" fill="${f.color}"/>
+      <text x="${rightX+rightW+8}" y="${(midYtext-3).toFixed(1)}" font-size="12" font-family="Inter, sans-serif" fill="#232739">${f.label}</text>
+      <text x="${rightX+rightW+8}" y="${(midYtext+12).toFixed(1)}" font-size="11" font-family="IBM Plex Mono, monospace" fill="#6B6759">${formatCOP(f.valor)}</text>
+    `;
+  }).join('');
+
+  el.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;">
+      <rect x="${leftX}" y="${padY}" width="${leftW}" height="${usableH}" fill="#1C2A46"/>
+      <text x="${leftX}" y="${padY-6}" font-size="12" font-family="Inter, sans-serif" fill="#1C2A46" font-weight="600">Ingreso mensual</text>
+      ${paths}
+      ${rightBlocks}
+    </svg>
+    ${negativo ? '<p style="font-size:12px;color:var(--red);margin-top:8px;">Tus compromisos actuales superan tu ingreso mensual — no queda margen libre.</p>' : ''}
+  `;
+}
+
+function mesLabelCorto(ym){
+  const d = new Date(ym+'-01T00:00:00');
+  return new Intl.DateTimeFormat('es-CO',{month:'short',year:'2-digit'}).format(d);
+}
+function datosBarrasApiladas(){
+  const meses = {};
+  function ensure(ym){ if(!meses[ym]) meses[ym] = {falabella:0, addi:0, otros:0, ahorro:0}; return meses[ym]; }
+
+  (state.historial||[]).forEach(h=>{
+    const ym = h.fecha.slice(0,7);
+    const m = ensure(ym);
+    if(m[h.cuenta]!==undefined) m[h.cuenta] += h.monto;
+  });
+
+  (state.margenMovimientos||[]).forEach(mv=>{
+    if((mv.tipo!=='ingreso' && mv.tipo!=='ajuste') || !mv.detalle) return;
+    const ym = mv.fecha.slice(0,7);
+    const m = ensure(ym);
+    const items = [...(mv.detalle.otrosFijos||[]), ...(mv.detalle.otrosNoFijos||[])];
+    items.forEach(it=>{
+      if(it.desc && it.desc.startsWith('Ahorro:')) m.ahorro += it.monto;
+      else m.otros += it.monto;
+    });
+  });
+
+  return Object.keys(meses).sort().map(ym=>({ym, ...meses[ym]}));
+}
+function renderBarrasApiladas(){
+  const el = document.getElementById('barras-apiladas');
+  if(!el) return;
+  const datos = datosBarrasApiladas();
+  if(!datos.length){
+    el.innerHTML = '<p style="font-size:13px;color:var(--ink-soft);">Aún no hay suficiente historial — cierra un mes o una quincena para empezar a ver la tendencia.</p>';
+    return;
+  }
+  const W=680, H=250, padL=10, padR=10, padT=24, padB=40;
+  const totales = datos.map(d=>d.falabella+d.addi+d.otros+d.ahorro);
+  const maxTotal = Math.max(...totales) || 1;
+  const n = datos.length;
+  const barW = Math.min(64, (W-padL-padR)/n - 16);
+  const gap = (W-padL-padR-barW*n)/(n+1);
+  const colores = {falabella:'#A24132', addi:'#7A2E22', otros:'#B4842A', ahorro:'#5B7A5E'};
+  const nombres = {falabella:'Falabella', addi:'Addi', otros:'Otros', ahorro:'Ahorro'};
+
+  let bars = '';
+  datos.forEach((d,i)=>{
+    const x = padL + gap*(i+1) + barW*i;
+    let yCursor = H-padB;
+    ['falabella','addi','otros','ahorro'].forEach(cat=>{
+      const val = d[cat];
+      if(val<=0) return;
+      const h = (val/maxTotal)*(H-padT-padB);
+      yCursor -= h;
+      bars += `<rect x="${x.toFixed(1)}" y="${yCursor.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" fill="${colores[cat]}" fill-opacity="0.85"/>`;
+    });
+    const total = d.falabella+d.addi+d.otros+d.ahorro;
+    bars += `<text x="${(x+barW/2).toFixed(1)}" y="${(yCursor-6).toFixed(1)}" font-size="10" text-anchor="middle" font-family="IBM Plex Mono, monospace" fill="#1C2A46">${formatCOPShort(total)}</text>`;
+    bars += `<text x="${(x+barW/2).toFixed(1)}" y="${(H-padB+16).toFixed(1)}" font-size="10" text-anchor="middle" font-family="IBM Plex Mono, monospace" fill="#6B6759">${mesLabelCorto(d.ym)}</text>`;
+  });
+
+  const leyenda = Object.keys(colores).map(k=>
+    `<span style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;"><span style="width:10px;height:10px;border-radius:2px;background:${colores[k]};display:inline-block;"></span>${nombres[k]}</span>`
+  ).join('');
+
+  el.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;">${bars}</svg>
+    <div style="font-size:11px;color:var(--ink-soft);margin-top:8px;">${leyenda}</div>
   `;
 }
 
