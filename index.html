@@ -171,6 +171,8 @@
   .mejora-item.hecha .mejora-check{background:var(--sage);border-color:var(--sage);}
   .mejora-texto{font-size:14px;color:var(--ink);}
   .mejora-item.hecha .mejora-texto{text-decoration:line-through;color:var(--ink-soft);}
+
+  .cat-badge{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;padding:2px 8px;border-radius:20px;color:#fff;vertical-align:middle;}
   .margen-card .mc-hist{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);max-height:140px;overflow-y:auto;}
 
   .proj-card{border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:10px;background:var(--paper);}
@@ -248,6 +250,7 @@
     <h2 class="page-title">Otros pagos o gastos fijos</h2>
     <p class="page-sub">Todo lo que no es Falabella ni Addi, pero también sale de tu ingreso.</p>
     <button class="btn-gastos" onclick="openOtroModal()">+ Agregar gasto</button>
+    <div id="categorias-resumen" style="margin-bottom:14px;"></div>
     <div class="btn-row" id="otros-tabs" style="margin-top:0;"></div>
     <div id="otros-list"></div>
   </section>
@@ -340,7 +343,7 @@ const DEFAULT_STATE = {
   margenMovimientos: [],
   mejoras: [
     { id:'debtfree', texto:'Fecha estimada de "libre de deudas"', hecha:true },
-    { id:'categorias', texto:'Categorías en "Otros" (comida, transporte, etc.)', hecha:false },
+    { id:'categorias', texto:'Categorías en "Otros" (comida, transporte, etc.)', hecha:true },
     { id:'presupuesto', texto:'Presupuesto vs. real por categoría', hecha:false },
     { id:'deuda_ingreso', texto:'Indicador de relación deuda/ingreso', hecha:false },
     { id:'meta_ahorro', texto:'Meta y barra de progreso en cada ahorro', hecha:false },
@@ -421,6 +424,15 @@ async function saveState(){
 }
 
 function formatCOP(n){ return new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(n||0); }
+const CATEGORIAS = [
+  {id:'comida', nombre:'Comida', color:'#C9825A'},
+  {id:'transporte', nombre:'Transporte', color:'#5A7A9C'},
+  {id:'vivienda', nombre:'Vivienda', color:'#1C2A46'},
+  {id:'salud', nombre:'Salud', color:'#B5677A'},
+  {id:'entretenimiento', nombre:'Entretenimiento', color:'#8570A6'},
+  {id:'otro', nombre:'Otro', color:'#8A8578'}
+];
+function catInfo(id){ return CATEGORIAS.find(c=>c.id===id) || CATEGORIAS[CATEGORIAS.length-1]; }
 function formatDate(d){ if(!d) return 'sin definir'; const dt=new Date(d+'T00:00:00'); return new Intl.DateTimeFormat('es-CO',{day:'numeric',month:'long'}).format(dt); }
 function daysUntil(d){ if(!d) return null; const t=new Date(); t.setHours(0,0,0,0); const due=new Date(d+'T00:00:00'); return Math.round((due-t)/86400000); }
 function statusFor(days){ if(days===null) return 'na'; if(days<0) return 'due'; if(days<=5) return 'soon'; return 'ok'; }
@@ -607,7 +619,7 @@ function otrosNoFijoEnMes(dia, ymStr){
 }
 function otrosTotal(){ return state.otros.reduce((s,o)=>s+o.monto,0); }
 
-function render(){ renderDebtHero(); renderMargenDisponible(); renderPaydays(); renderFlujoDinero(); renderGrid(); renderOtros(); renderHistorial(); renderDeudaChart(); renderBarrasApiladas(); renderAhorros(); renderProyeccion(); renderMejoras(); }
+function render(){ renderDebtHero(); renderMargenDisponible(); renderPaydays(); renderFlujoDinero(); renderGrid(); renderOtros(); renderCategoriasResumen(); renderHistorial(); renderDeudaChart(); renderBarrasApiladas(); renderAhorros(); renderProyeccion(); renderMejoras(); }
 
 function fechaLibreDeudas(){
   let maxFecha = null;
@@ -922,7 +934,7 @@ function otroItemHTML(o, i){
   return `
     <div class="otro-item">
       <div class="oi-head"><span class="oi-desc">${o.desc}</span><span class="oi-amt">${formatCOP(o.monto)}</span></div>
-      <div class="oi-meta">${meta}</div>
+      <div class="oi-meta">${meta} <span class="cat-badge" style="background:${catInfo(o.categoria).color};">${catInfo(o.categoria).nombre}</span></div>
       <div class="oi-actions">${extraActions}${bloqueado?'':`<span onclick="removeOtro(${i})">quitar</span>`}</div>
     </div>`;
 }
@@ -948,6 +960,22 @@ function renderOtros(){
   el.innerHTML = activos.length
     ? activos.map(x=>otroItemHTML(x.o, x.i)).join('')
     : '<p style="font-size:14px;color:var(--ink-soft);">Nada registrado en esta categoría todavía.</p>';
+}
+function renderCategoriasResumen(){
+  const el = document.getElementById('categorias-resumen');
+  if(!el) return;
+  const totales = {};
+  state.otros.forEach(o=>{
+    const cat = o.categoria || 'otro';
+    totales[cat] = (totales[cat]||0) + o.monto;
+  });
+  const entries = Object.entries(totales).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  if(!entries.length){ el.innerHTML=''; return; }
+  el.innerHTML = `<div style="font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;font-family:'IBM Plex Mono',monospace;margin-bottom:8px;">Por categoría</div>` +
+    entries.map(([id,val])=>{
+      const c = catInfo(id);
+      return `<span style="display:inline-flex;align-items:center;gap:6px;margin:0 14px 8px 0;font-size:12.5px;"><span style="width:9px;height:9px;border-radius:50%;background:${c.color};display:inline-block;"></span>${c.nombre}: <b style="font-family:'IBM Plex Mono',monospace;">${formatCOP(val)}</b></span>`;
+    }).join('');
 }
 function renderHistorial(){
   const totalesEl = document.getElementById('hist-totales');
@@ -1351,6 +1379,7 @@ function openOtroModal(){
   showModal(`
     <h3>Agregar gasto</h3>
     <div class="field-m"><label>Descripción</label><input type="text" id="om-desc" placeholder="Ej: Mercado, imprevisto, arriendo"></div>
+    <div class="field-m"><label>Categoría</label><select id="om-categoria">${CATEGORIAS.map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('')}</select></div>
     <div class="field-m"><label>¿Se repite?</label><select id="om-tipo" onchange="toggleOtroModalFecha()">
       <option value="unico">Solo esta vez</option>
       <option value="fijo">Fijo cada mes</option>
@@ -1422,6 +1451,7 @@ function saveOtroModal(){
   const desc = document.getElementById('om-desc').value || 'Gasto';
   const monto = parseFloat(document.getElementById('om-monto').value)||0;
   const tipo = document.getElementById('om-tipo').value;
+  const categoria = document.getElementById('om-categoria').value;
   if(monto<=0){ closeModal(); return; }
   let item;
   if(tipo==='unico'){
@@ -1433,7 +1463,7 @@ function saveOtroModal(){
     if(origen==='margen'){
       state.margenDisponible = (state.margenDisponible||0) - monto;
       state.margenMovimientos = state.margenMovimientos || [];
-      state.margenMovimientos.unshift({ fecha, tipo:'gasto', monto:-monto, desc });
+      state.margenMovimientos.unshift({ fecha, tipo:'gasto', monto:-monto, desc, categoria });
       if(ahorroId){
         const ahorro = state.ahorros.find(a=>a.id===ahorroId);
         if(ahorro){
@@ -1451,7 +1481,7 @@ function saveOtroModal(){
       customAlert(`La quincena del ${formatDate(qFecha)} ya está cerrada. No puedes agregar gastos ahí.`, 'error');
       closeModal(); return;
     }
-    item = {desc, monto, tipo, dia, fecha};
+    item = {desc, monto, tipo, dia, fecha, categoria};
     if(ahorroId){
       const ahorro = state.ahorros.find(a=>a.id===ahorroId);
       if(ahorro){
@@ -1465,11 +1495,11 @@ function saveOtroModal(){
     }
   } else if(tipo==='fijo'){
     const dia = document.getElementById('om-dia').value;
-    item = {desc, monto, tipo, dia};
+    item = {desc, monto, tipo, dia, categoria};
   } else {
     const fecha = document.getElementById('om-cuotafecha').value || new Date().toISOString().slice(0,10);
     const cuotasTotales = parseInt(document.getElementById('om-cuotastotales').value)||1;
-    item = {desc, monto, tipo, dia: diaFromFecha(fecha), fecha, cuotaMensual: monto, cuotasTotales, cuotasPagadas:0};
+    item = {desc, monto, tipo, dia: diaFromFecha(fecha), fecha, cuotaMensual: monto, cuotasTotales, cuotasPagadas:0, categoria};
   }
   state.otros.push(item);
   closeModal(); render(); saveState();
