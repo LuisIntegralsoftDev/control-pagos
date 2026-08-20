@@ -230,18 +230,6 @@
     </div>
 
     <button class="btn-gastos" onclick="showView('otros')">+ Otros pagos o gastos fijos</button>
-
-    <div class="sim">
-      <h3>¿Me alcanza para comprar esto?</h3>
-      <div class="fields">
-        <div class="field"><label>Cuenta</label><select id="sim-cuenta"><option value="falabella">Falabella</option><option value="addi">Addi</option></select></div>
-        <div class="field"><label>Monto</label><input type="number" id="sim-monto" placeholder="Ej: 150000"></div>
-        <div class="field"><label>Cuotas</label><input type="number" id="sim-cuotas" value="1" min="1"></div>
-        <button class="primary" onclick="simular()">Calcular</button>
-      </div>
-      <div id="sim-out"></div>
-      <p class="sim-note">Estimado dividiendo el monto entre las cuotas, sin intereses — tu cuota real suele quedar un poco más alta.</p>
-    </div>
   </section>
 
   <section class="view" id="view-cuentas" style="display:none;">
@@ -618,20 +606,30 @@ function renderMargenDisponible(){
   const el = document.getElementById('margen-disponible-card');
   if(!el) return;
   const m = state.margenDisponible||0;
-  const hist = (state.margenMovimientos||[]).slice(0,8).map((mv,i)=>{
-    const color = mv.monto>=0 ? 'var(--sage)' : 'var(--red)';
-    const signo = mv.monto>=0 ? '+' : '';
-    const verBtn = mv.detalle ? ` · <span onclick="verDetalleMargen(${i})" style="cursor:pointer;text-decoration:underline;">ver detalles</span>` : '';
-    return `<div class="cp"><div><div class="desc">${mv.desc}</div><div class="date">${formatDate(mv.fecha)}${verBtn}</div></div><div class="amt" style="color:${color};">${signo}${formatCOP(mv.monto)}</div></div>`;
-  }).join('') || '<div class="cp"><span class="date">Sin movimientos todavía</span></div>';
   el.innerHTML = `
     <div class="margen-card">
       <div class="mc-label">Margen disponible</div>
       <div class="mc-amount ${m>=0?'pos':'neg'}">${formatCOP(m)}</div>
-      <button class="small ghost" onclick="openGastoMargenModal()">− Gastar de aquí</button>
-      <div class="mc-hist">${hist}</div>
+      <div class="btn-row" style="margin-top:0;">
+        <button class="small ghost" onclick="openGastoMargenModal()">− Gastar de aquí</button>
+        <button class="small ghost" onclick="verHistorialMargen()">Ver detalles</button>
+      </div>
     </div>
   `;
+}
+function verHistorialMargen(){
+  const movs = state.margenMovimientos || [];
+  const lista = movs.length ? movs.map((mv,i)=>{
+    const color = mv.monto>=0 ? 'var(--sage)' : 'var(--red)';
+    const signo = mv.monto>=0 ? '+' : '';
+    const verBtn = mv.detalle ? ` · <span onclick="verDetalleMargen(${i})" style="cursor:pointer;text-decoration:underline;">ver detalles</span>` : '';
+    return `<div class="cp"><div><div class="desc">${mv.desc}</div><div class="date">${formatDate(mv.fecha)}${verBtn}</div></div><div class="amt" style="color:${color};">${signo}${formatCOP(mv.monto)}</div></div>`;
+  }).join('') : '<div class="cp"><span class="date">Sin movimientos todavía</span></div>';
+  showModal(`
+    <h3>Historial del margen disponible</h3>
+    <div style="max-height:60vh;overflow-y:auto;">${lista}</div>
+    <div class="modal-actions"><button class="primary" onclick="closeModal()">Cerrar</button></div>
+  `);
 }
 function verDetalleMargen(i){
   const mv = (state.margenMovimientos||[])[i];
@@ -1748,26 +1746,7 @@ function saveAjustesAddi(){
   closeModal(); render(); saveState();
 }
 
-function simular(){
-  const cuenta = document.getElementById('sim-cuenta').value;
-  const monto = parseFloat(document.getElementById('sim-monto').value)||0;
-  const cuotas = parseInt(document.getElementById('sim-cuotas').value)||1;
-  if(monto<=0){ document.getElementById('sim-out').innerHTML=''; return; }
-  const cuotaEst = monto/cuotas;
-  let ingreso, compromiso, dia;
-  if(cuenta==='falabella'){ ingreso=state.income.day15; compromiso=falabellaUsado()+otrosPorDia(15); dia=15; }
-  else { ingreso=state.income.day1; compromiso=addiUsado()+otrosPorDia(1); dia=1; }
-  const margenActual = ingreso - compromiso;
-  const margenNuevo = margenActual - cuotaEst;
-  const cls = margenNuevo>=0 ? 'pos' : 'neg';
-  document.getElementById('sim-out').innerHTML = `
-    <div class="sim-result ${cls}">
-      Cuota estimada: <b>${formatCOP(cuotaEst)}</b>/mes.<br>
-      Tu margen del día ${dia} pasaría de <b>${formatCOP(margenActual)}</b> a <b>${formatCOP(margenNuevo)}</b>.
-      ${margenNuevo<0 ? '<br><b>Te quedarías corto ese mes.</b>' : ''}
-    </div>
-  `;
-}
+
 
 (async()=>{
   const { data:{ session } } = await sb.auth.getSession();
