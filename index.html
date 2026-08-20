@@ -151,17 +151,17 @@
   .debt-hero .label{font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.1em;opacity:.85;}
   .debt-hero .amount{font-family:'Fraunces',serif;font-weight:700;font-size:24px;margin:2px 0 0;line-height:1.1;}
 
-  .debt-cards-scroll{display:flex;gap:12px;overflow-x:auto;padding:2px 2px 12px;margin-bottom:16px;-webkit-overflow-scrolling:touch;scrollbar-width:thin;}
-  .credit-card{flex:0 0 210px;border-radius:14px;padding:16px 18px;color:#fff;position:relative;box-shadow:0 4px 14px rgba(0,0,0,.15);}
+  .debt-cards-scroll{display:flex;gap:14px;overflow-x:auto;padding:2px 2px 12px;margin-bottom:16px;-webkit-overflow-scrolling:touch;scrollbar-width:thin;}
+  .credit-card{flex:0 0 300px;height:172px;border-radius:16px;padding:20px 22px;color:#fff;position:relative;box-shadow:0 6px 18px rgba(0,0,0,.18);display:flex;flex-direction:column;justify-content:space-between;}
   .credit-card.falabella{background:linear-gradient(135deg,#A24132 0%,#7A2E22 100%);}
   .credit-card.addi{background:linear-gradient(135deg,#1C2A46 0%,#0F1830 100%);}
   .credit-card.otros{background:linear-gradient(135deg,#B4842A 0%,#8A6420 100%);}
-  .credit-card .cc-brand{font-family:'IBM Plex Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;opacity:.8;margin-bottom:16px;}
-  .credit-card .cc-balance{font-family:'Fraunces',serif;font-weight:700;font-size:21px;margin-bottom:2px;}
-  .credit-card .cc-label{font-size:10px;opacity:.75;text-transform:uppercase;letter-spacing:.04em;margin-bottom:12px;}
-  .credit-card .cc-bar{height:5px;border-radius:4px;background:rgba(255,255,255,.25);overflow:hidden;margin-bottom:8px;}
+  .credit-card .cc-brand{font-family:'IBM Plex Mono',monospace;font-size:12px;text-transform:uppercase;letter-spacing:.1em;opacity:.85;}
+  .credit-card .cc-balance{font-family:'Fraunces',serif;font-weight:700;font-size:27px;margin-bottom:2px;}
+  .credit-card .cc-label{font-size:10.5px;opacity:.75;text-transform:uppercase;letter-spacing:.04em;}
+  .credit-card .cc-bar{height:5px;border-radius:4px;background:rgba(255,255,255,.25);overflow:hidden;margin:12px 0 8px;}
   .credit-card .cc-bar-fill{height:100%;background:#fff;border-radius:4px;}
-  .credit-card .cc-meta{display:flex;justify-content:space-between;font-size:10px;opacity:.85;font-family:'IBM Plex Mono',monospace;}
+  .credit-card .cc-meta{display:flex;justify-content:space-between;font-size:10.5px;opacity:.85;font-family:'IBM Plex Mono',monospace;}
 
   .payday-card.solo{padding:24px 22px;}
   .payday-card.solo .pd-date{font-size:28px;}
@@ -679,22 +679,33 @@ function renderDebtCards(){
   el.innerHTML = `
     <div class="credit-card falabella">
       <div class="cc-brand">Falabella</div>
-      <div class="cc-balance">${formatCOP(f.balance)}</div>
-      <div class="cc-label">Saldo utilizado</div>
-      <div class="cc-bar"><div class="cc-bar-fill" style="width:${fPct.toFixed(0)}%"></div></div>
-      <div class="cc-meta"><span>Cupo ${formatCOP(f.cupoTotal||0)}</span><span>Disp ${formatCOP(f.available)}</span></div>
+      <div>
+        <div class="cc-balance">${formatCOP(f.balance)}</div>
+        <div class="cc-label">Saldo utilizado</div>
+      </div>
+      <div>
+        <div class="cc-bar"><div class="cc-bar-fill" style="width:${fPct.toFixed(0)}%"></div></div>
+        <div class="cc-meta"><span>Cupo ${formatCOP(f.cupoTotal||0)}</span><span>Disp ${formatCOP(f.available)}</span></div>
+      </div>
     </div>
     <div class="credit-card addi">
       <div class="cc-brand">Addi · Cupo</div>
-      <div class="cc-balance">${formatCOP(aUsado)}</div>
-      <div class="cc-label">Saldo utilizado</div>
-      <div class="cc-bar"><div class="cc-bar-fill" style="width:${aPct.toFixed(0)}%"></div></div>
-      <div class="cc-meta"><span>Cupo ${formatCOP(aCupoTotal)}</span><span>Disp ${formatCOP(state.addi.cupo.disponible)}</span></div>
+      <div>
+        <div class="cc-balance">${formatCOP(aUsado)}</div>
+        <div class="cc-label">Saldo utilizado</div>
+      </div>
+      <div>
+        <div class="cc-bar"><div class="cc-bar-fill" style="width:${aPct.toFixed(0)}%"></div></div>
+        <div class="cc-meta"><span>Cupo ${formatCOP(aCupoTotal)}</span><span>Disp ${formatCOP(state.addi.cupo.disponible)}</span></div>
+      </div>
     </div>
     <div class="credit-card otros">
       <div class="cc-brand">Otros fijos</div>
-      <div class="cc-balance">${formatCOP(otrosFijos)}</div>
-      <div class="cc-label">Total mensual</div>
+      <div>
+        <div class="cc-balance">${formatCOP(otrosFijos)}</div>
+        <div class="cc-label">Total mensual</div>
+      </div>
+      <div class="cc-meta"><span>Suma de todos tus gastos fijos</span></div>
     </div>
   `;
 }
