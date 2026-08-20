@@ -164,6 +164,13 @@
   .margen-card .mc-amount{font-family:'Fraunces',serif;font-weight:700;font-size:26px;margin-bottom:10px;}
   .margen-card .mc-amount.pos{color:var(--sage);}
   .margen-card .mc-amount.neg{color:var(--red);}
+
+  .mejora-item{display:flex;align-items:center;gap:12px;padding:14px 16px;border:1px solid var(--line);border-radius:10px;margin-bottom:10px;background:var(--paper);cursor:pointer;}
+  .mejora-item.hecha{background:var(--sage-bg);border-color:var(--sage);}
+  .mejora-check{width:22px;height:22px;border-radius:6px;border:2px solid var(--line);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;background:#fff;}
+  .mejora-item.hecha .mejora-check{background:var(--sage);border-color:var(--sage);}
+  .mejora-texto{font-size:14px;color:var(--ink);}
+  .mejora-item.hecha .mejora-texto{text-decoration:line-through;color:var(--ink-soft);}
   .margen-card .mc-hist{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);max-height:140px;overflow-y:auto;}
 
   .proj-card{border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:10px;background:var(--paper);}
@@ -207,6 +214,7 @@
   <button data-view="historial" onclick="navTo('historial')">Historial</button>
   <button data-view="ahorros" onclick="navTo('ahorros')">Ahorros</button>
   <button data-view="proyeccion" onclick="navTo('proyeccion')">Proyección</button>
+  <button data-view="mejoras" onclick="navTo('mejoras')">Mejoras</button>
   <button onclick="logout()" style="margin-top:auto;color:#C9705A;">Cerrar sesión</button>
 </nav>
 
@@ -283,6 +291,12 @@
     </div>
   </section>
 
+  <section class="view" id="view-mejoras" style="display:none;">
+    <h2 class="page-title">Mejoras</h2>
+    <p class="page-sub">Ideas para seguir puliendo la app — se van marcando a medida que se implementan.</p>
+    <div id="mejoras-list"></div>
+  </section>
+
   <p class="footnote">Los datos quedan guardados en la base de datos. Marca "cuota pagada" en cada compra a medida que avancen los meses, y agrega lo nuevo que compres.</p>
 </div>
 
@@ -323,7 +337,16 @@ const DEFAULT_STATE = {
   ahorroPinHash: null,
   quincenasCerradas: [],
   margenDisponible: 0,
-  margenMovimientos: []
+  margenMovimientos: [],
+  mejoras: [
+    { id:'debtfree', texto:'Fecha estimada de "libre de deudas"', hecha:true },
+    { id:'categorias', texto:'Categorías en "Otros" (comida, transporte, etc.)', hecha:false },
+    { id:'presupuesto', texto:'Presupuesto vs. real por categoría', hecha:false },
+    { id:'deuda_ingreso', texto:'Indicador de relación deuda/ingreso', hecha:false },
+    { id:'meta_ahorro', texto:'Meta y barra de progreso en cada ahorro', hecha:false },
+    { id:'exportar', texto:'Exportar un respaldo de tus datos', hecha:false },
+    { id:'notificaciones', texto:'Notificaciones push (recordatorios)', hecha:false }
+  ]
 };
 
 let state = null;
@@ -383,6 +406,7 @@ async function loadState(){
     if(!state.quincenasCerradas) state.quincenasCerradas = [];
     if(state.margenDisponible===undefined) state.margenDisponible = 0;
     if(!state.margenMovimientos) state.margenMovimientos = [];
+    if(!state.mejoras) state.mejoras = JSON.parse(JSON.stringify(DEFAULT_STATE.mejoras));
   } else {
     state = JSON.parse(JSON.stringify(DEFAULT_STATE));
     await sb.from('pagos_estado').insert({ user_id: user.id, data: state });
@@ -583,13 +607,33 @@ function otrosNoFijoEnMes(dia, ymStr){
 }
 function otrosTotal(){ return state.otros.reduce((s,o)=>s+o.monto,0); }
 
-function render(){ renderDebtHero(); renderMargenDisponible(); renderPaydays(); renderFlujoDinero(); renderGrid(); renderOtros(); renderHistorial(); renderDeudaChart(); renderBarrasApiladas(); renderAhorros(); renderProyeccion(); }
+function render(){ renderDebtHero(); renderMargenDisponible(); renderPaydays(); renderFlujoDinero(); renderGrid(); renderOtros(); renderHistorial(); renderDeudaChart(); renderBarrasApiladas(); renderAhorros(); renderProyeccion(); renderMejoras(); }
 
+function fechaLibreDeudas(){
+  let maxFecha = null;
+  const considerar = (fecha)=>{ if(fecha && (!maxFecha || fecha>maxFecha)) maxFecha = fecha; };
+
+  state.falabella.compras.forEach(c=>{
+    const r = restantes(c);
+    if(r>0) considerar(addMonths(state.falabella.proximaFecha, r-1));
+  });
+  state.addi.cupo.compras.forEach(c=>{
+    const r = restantes(c);
+    if(r>0) considerar(addMonths(state.addi.proximaFecha, r-1));
+  });
+  if(state.addi.grande.esTuyo && state.addi.grande.cuotaFija>0 && state.addi.grande.pendiente>0){
+    const meses = Math.ceil(state.addi.grande.pendiente / state.addi.grande.cuotaFija);
+    considerar(addMonths(state.addi.proximaFecha, meses-1));
+  }
+  return maxFecha;
+}
 function renderDebtHero(){
   const f = falabellaPendienteTotal();
   const a = addiTotalPendiente();
   const fijos = state.otros.filter(o=>(o.tipo||'fijo')==='fijo').reduce((s,o)=>s+o.monto,0);
   const total = f + a;
+  const libreFecha = fechaLibreDeudas();
+  const libreTexto = total<=0 ? 'Ya estás libre de deudas' : (libreFecha ? `Libre de deudas: ${mesLabel(libreFecha)}` : '');
   const el = document.getElementById('debt-hero');
   el.innerHTML = `
     <div class="label">Debes en total</div>
@@ -599,6 +643,7 @@ function renderDebtHero(){
       <div>Addi<b>${formatCOP(a)}</b></div>
       <div>Fijos<b>${formatCOP(fijos)}</b></div>
     </div>
+    ${libreTexto ? `<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.25);font-size:12px;opacity:.9;">${libreTexto}</div>` : ''}
   `;
 }
 
@@ -1240,6 +1285,23 @@ function verDetalleQuincena(i){
     ${cuerpo || '<p style="font-size:13px;color:var(--ink-soft);">Nada programado para este pago.</p>'}
     <div class="modal-actions"><button class="primary" onclick="closeModal()">Cerrar</button></div>
   `);
+}
+
+function renderMejoras(){
+  const el = document.getElementById('mejoras-list');
+  if(!el) return;
+  el.innerHTML = (state.mejoras||[]).map(m=>`
+    <div class="mejora-item ${m.hecha?'hecha':''}" onclick="toggleMejora('${m.id}')">
+      <div class="mejora-check">${m.hecha?'✓':''}</div>
+      <div class="mejora-texto">${m.texto}</div>
+    </div>
+  `).join('');
+}
+function toggleMejora(id){
+  const m = (state.mejoras||[]).find(x=>x.id===id);
+  if(!m) return;
+  m.hecha = !m.hecha;
+  render(); saveState();
 }
 
 function renderProyeccion(){
