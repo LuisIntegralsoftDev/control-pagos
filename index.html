@@ -452,6 +452,7 @@ const CATEGORIAS = [
   {id:'vivienda', nombre:'Vivienda', color:'#1C2A46'},
   {id:'salud', nombre:'Salud', color:'#B5677A'},
   {id:'entretenimiento', nombre:'Entretenimiento', color:'#8570A6'},
+  {id:'apuestas', nombre:'Apuestas', color:'#943D3D'},
   {id:'otro', nombre:'Otro', color:'#8A8578'}
 ];
 function catInfo(id){ return CATEGORIAS.find(c=>c.id===id) || CATEGORIAS[CATEGORIAS.length-1]; }
@@ -730,6 +731,7 @@ function renderMargenDisponible(){
       <div class="mc-amount ${m>=0?'pos':'neg'}">${formatCOP(m)}</div>
       <div class="btn-row" style="margin-top:0;">
         <button class="small ghost" onclick="openGastoMargenModal()">− Gastar de aquí</button>
+        <button class="small ghost" onclick="openIngresoMargenModal()">+ Agregar al margen</button>
         <button class="small ghost" onclick="verHistorialMargen()">Ver detalles</button>
       </div>
     </div>
@@ -741,7 +743,8 @@ function verHistorialMargen(){
     const color = mv.monto>=0 ? 'var(--sage)' : 'var(--red)';
     const signo = mv.monto>=0 ? '+' : '';
     const verBtn = mv.detalle ? ` · <span onclick="verDetalleMargen(${i})" style="cursor:pointer;text-decoration:underline;">ver detalles</span>` : '';
-    return `<div class="cp"><div><div class="desc">${mv.desc}</div><div class="date">${formatDate(mv.fecha)}${verBtn}</div></div><div class="amt" style="color:${color};">${signo}${formatCOP(mv.monto)}</div></div>`;
+    const catBadge = mv.categoria ? ` <span class="cat-badge" style="background:${catInfo(mv.categoria).color};">${catInfo(mv.categoria).nombre}</span>` : '';
+    return `<div class="cp"><div><div class="desc">${mv.desc}${catBadge}</div><div class="date">${formatDate(mv.fecha)}${verBtn}</div></div><div class="amt" style="color:${color};">${signo}${formatCOP(mv.monto)}</div></div>`;
   }).join('') : '<div class="cp"><span class="date">Sin movimientos todavía</span></div>';
   showModal(`
     <h3>Historial del margen disponible</h3>
@@ -765,6 +768,7 @@ function openGastoMargenModal(){
   showModal(`
     <h3>Gastar del margen disponible</h3>
     <div class="field-m"><label>Descripción</label><input type="text" id="gm-desc" placeholder="Ej: Almuerzo, taxi, imprevisto"></div>
+    <div class="field-m"><label>Categoría</label><select id="gm-categoria">${CATEGORIAS.map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('')}</select></div>
     <div class="field-m"><label>Monto</label><input type="number" id="gm-monto" placeholder="Ej: 20000"></div>
     <div class="field-m"><label>Fecha</label><input type="date" id="gm-fecha" value="${today}"></div>
     <div class="hint" style="margin-top:-6px;">Esto ya lo pagaste con dinero que ya tenías — no genera una cuenta por pagar nueva.</div>
@@ -773,11 +777,32 @@ function openGastoMargenModal(){
 }
 function saveGastoMargen(){
   const desc = document.getElementById('gm-desc').value || 'Gasto';
+  const categoria = document.getElementById('gm-categoria').value;
   const monto = parseFloat(document.getElementById('gm-monto').value)||0;
   const fecha = document.getElementById('gm-fecha').value || new Date().toISOString().slice(0,10);
   if(monto<=0){ closeModal(); return; }
   state.margenDisponible = (state.margenDisponible||0) - monto;
-  state.margenMovimientos.unshift({fecha, tipo:'gasto', monto:-monto, desc});
+  state.margenMovimientos.unshift({fecha, tipo:'gasto', monto:-monto, desc, categoria});
+  closeModal(); render(); saveState();
+}
+function openIngresoMargenModal(){
+  const today = new Date().toISOString().slice(0,10);
+  showModal(`
+    <h3>Agregar al margen disponible</h3>
+    <div class="field-m"><label>Descripción</label><input type="text" id="im-desc" placeholder="Ej: Ingreso extra, regalo, reembolso"></div>
+    <div class="field-m"><label>Monto</label><input type="number" id="im-monto" placeholder="Ej: 50000"></div>
+    <div class="field-m"><label>Fecha</label><input type="date" id="im-fecha" value="${today}"></div>
+    <div class="hint" style="margin-top:-6px;">Para cuando te entra plata que no viene de tu pago quincenal.</div>
+    <div class="modal-actions"><button class="ghost" onclick="closeModal()">Cancelar</button><button class="primary" onclick="saveIngresoMargen()">Guardar</button></div>
+  `);
+}
+function saveIngresoMargen(){
+  const desc = document.getElementById('im-desc').value || 'Ingreso extra';
+  const monto = parseFloat(document.getElementById('im-monto').value)||0;
+  const fecha = document.getElementById('im-fecha').value || new Date().toISOString().slice(0,10);
+  if(monto<=0){ closeModal(); return; }
+  state.margenDisponible = (state.margenDisponible||0) + monto;
+  state.margenMovimientos.unshift({fecha, tipo:'ingreso', monto, desc});
   closeModal(); render(); saveState();
 }
 
@@ -1029,6 +1054,11 @@ function renderCategoriasResumen(){
   state.otros.forEach(o=>{
     const cat = o.categoria || 'otro';
     totales[cat] = (totales[cat]||0) + o.monto;
+  });
+  (state.margenMovimientos||[]).forEach(mv=>{
+    if(mv.tipo==='gasto' && mv.categoria){
+      totales[mv.categoria] = (totales[mv.categoria]||0) + Math.abs(mv.monto);
+    }
   });
   const presupuestos = state.presupuestos || {};
   const ids = Array.from(new Set([
